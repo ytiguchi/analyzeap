@@ -11,23 +11,22 @@ import pandas as pd
 from io import StringIO, BytesIO
 
 # R2設定（環境変数から取得）
-R2_ACCOUNT_ID = os.environ.get('R2_ACCOUNT_ID', '')
+R2_ENDPOINT_URL = os.environ.get('R2_ENDPOINT_URL', '')
 R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID', '')
 R2_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY', '')
 R2_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME', 'analyzeap-data')
-
-# 商品マスタのファイル名
-PRODUCT_MASTER_KEY = 'product_list.csv'
+R2_PRODUCT_MASTER_KEY = os.environ.get('R2_PRODUCT_MASTER_KEY', 'product_master.csv')
 
 
 def get_r2_client():
     """R2クライアントを取得"""
-    if not all([R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY]):
+    if not all([R2_ENDPOINT_URL, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY]):
+        print(f"R2 config missing: ENDPOINT={bool(R2_ENDPOINT_URL)}, KEY={bool(R2_ACCESS_KEY_ID)}, SECRET={bool(R2_SECRET_ACCESS_KEY)}")
         return None
     
     return boto3.client(
         's3',
-        endpoint_url=f'https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com',
+        endpoint_url=R2_ENDPOINT_URL,
         aws_access_key_id=R2_ACCESS_KEY_ID,
         aws_secret_access_key=R2_SECRET_ACCESS_KEY,
         config=Config(signature_version='s3v4'),
@@ -43,25 +42,28 @@ def download_product_master():
         return None
     
     try:
-        response = client.get_object(Bucket=R2_BUCKET_NAME, Key=PRODUCT_MASTER_KEY)
+        print(f"Downloading from R2: {R2_BUCKET_NAME}/{R2_PRODUCT_MASTER_KEY}")
+        response = client.get_object(Bucket=R2_BUCKET_NAME, Key=R2_PRODUCT_MASTER_KEY)
         content = response['Body'].read()
         
         # エンコーディング検出して読み込み
-        for enc in ['cp932', 'utf-8', 'utf-8-sig']:
+        for enc in ['utf-8', 'utf-8-sig', 'cp932']:
             try:
                 csv_str = content.decode(enc)
                 df = pd.read_csv(StringIO(csv_str))
-                print(f"Downloaded product master from R2: {len(df)} rows")
+                print(f"✅ Downloaded product master from R2: {len(df)} rows (encoding: {enc})")
                 return df
-            except:
+            except Exception as e:
+                print(f"  Encoding {enc} failed: {e}")
                 continue
         
+        print("❌ All encodings failed")
         return None
     except client.exceptions.NoSuchKey:
-        print(f"Product master not found in R2: {PRODUCT_MASTER_KEY}")
+        print(f"❌ Product master not found in R2: {R2_PRODUCT_MASTER_KEY}")
         return None
     except Exception as e:
-        print(f"Error downloading from R2: {e}")
+        print(f"❌ Error downloading from R2: {e}")
         return None
 
 
@@ -76,14 +78,14 @@ def upload_product_master(filepath):
         with open(filepath, 'rb') as f:
             client.put_object(
                 Bucket=R2_BUCKET_NAME,
-                Key=PRODUCT_MASTER_KEY,
+                Key=R2_PRODUCT_MASTER_KEY,
                 Body=f,
                 ContentType='text/csv'
             )
-        print(f"Uploaded product master to R2: {PRODUCT_MASTER_KEY}")
+        print(f"✅ Uploaded product master to R2: {R2_PRODUCT_MASTER_KEY}")
         return True
     except Exception as e:
-        print(f"Error uploading to R2: {e}")
+        print(f"❌ Error uploading to R2: {e}")
         return False
 
 
@@ -115,7 +117,7 @@ def get_product_master_info():
         return None
     
     try:
-        response = client.head_object(Bucket=R2_BUCKET_NAME, Key=PRODUCT_MASTER_KEY)
+        response = client.head_object(Bucket=R2_BUCKET_NAME, Key=R2_PRODUCT_MASTER_KEY)
         return {
             'size': response['ContentLength'],
             'last_modified': response['LastModified'],
@@ -123,4 +125,3 @@ def get_product_master_info():
         }
     except:
         return {'exists': False}
-
