@@ -55,13 +55,48 @@
             </div>
         </div>
 
+        <!-- GA4 API 自動取得 -->
+        {% if ga4_api_enabled %}
+        <div class="card animate-in delay-1" style="margin-bottom: 2rem; border: 2px solid var(--accent-mint);">
+            <div class="card-header">
+                <h3 class="card-title">🔗 GA4 API 自動取得</h3>
+                <span class="badge badge-success">API連携中</span>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                ワンクリックでGA4から最新データを取得できます
+            </p>
+            
+            <div class="ga4-fetch-buttons">
+                <form method="POST" action="{{ url_for('fetch_ga4') }}" style="display: inline;">
+                    <input type="hidden" name="period_type" value="yesterday">
+                    <button type="submit" class="btn btn-primary">
+                        📅 前日データを取得
+                    </button>
+                </form>
+                <form method="POST" action="{{ url_for('fetch_ga4') }}" style="display: inline;">
+                    <input type="hidden" name="period_type" value="weekly">
+                    <button type="submit" class="btn btn-secondary">
+                        📆 週次データを取得（7日間）
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- ブランド別GA売上 -->
         <div class="card animate-in delay-1">
             <div class="card-header">
                 <h3 class="card-title">📊 GA4売上CSV（ブランド別）</h3>
+                {% if ga4_api_enabled %}
+                <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted);">手動アップロード</span>
+                {% endif %}
             </div>
             <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                {% if ga4_api_enabled %}
+                API取得できない場合は、CSVを手動でアップロードできます
+                {% else %}
                 各ブランドのGA4プロパティからエクスポートしたEコマース購入データ
+                {% endif %}
             </p>
 
             <div class="brand-upload-grid">
@@ -332,6 +367,19 @@
 .btn-sync:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(201, 184, 217, 0.4);
+}
+
+/* GA4 API ボタン */
+.ga4-fetch-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.ga4-fetch-buttons .btn {
+    flex: 1;
+    min-width: 200px;
+    justify-content: center;
 }
 </style>
 

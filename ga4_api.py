@@ -1,0 +1,209 @@
+"""
+GA4 API 連携
+- Google Analytics Data API を使用してEコマースデータを取得
+- 前日分析・週次分析に対応
+"""
+
+import os
+import json
+from datetime import datetime, timedelta
+from google.analytics.data_v1beta import BetaAnalyticsDataClient
+from google.analytics.data_v1beta.types import (
+    RunReportRequest,
+    Dimension,
+    Metric,
+    DateRange,
+)
+from google.oauth2 import service_account
+import pandas as pd
+
+# GA4 プロパティID（ブランド別）- 環境変数から取得
+GA4_PROPERTIES = {
+    'rady': os.environ.get('GA4_PROPERTY_RADY', ''),
+    'cherimi': os.environ.get('GA4_PROPERTY_CHERIMI', ''),
+    'michellmacaron': os.environ.get('GA4_PROPERTY_MICHELLMACARON', ''),
+    'radycharm': os.environ.get('GA4_PROPERTY_RADYCHARM', ''),
+}
+
+# サービスアカウント認証情報（環境変数からJSON文字列として取得）
+GA4_CREDENTIALS_JSON = os.environ.get('GA4_CREDENTIALS_JSON', '')
+
+
+def get_ga4_client():
+    """GA4 APIクライアントを取得"""
+    if not GA4_CREDENTIALS_JSON:
+        print("❌ GA4_CREDENTIALS_JSON not set")
+        return None
+    
+    try:
+        credentials_info = json.loads(GA4_CREDENTIALS_JSON)
+        credentials = service_account.Credentials.from_service_account_info(
+            credentials_info,
+            scopes=['https://www.googleapis.com/auth/analytics.readonly']
+        )
+        client = BetaAnalyticsDataClient(credentials=credentials)
+        return client
+    except Exception as e:
+        print(f"❌ Error creating GA4 client: {e}")
+        return None
+
+
+def fetch_ecommerce_data(brand: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    GA4からEコマースデータを取得
+    
+    Args:
+        brand: ブランド名 (rady, cherimi, michellmacaron, radycharm)
+        start_date: 開始日 (YYYY-MM-DD)
+        end_date: 終了日 (YYYY-MM-DD)
+    
+    Returns:
+        DataFrame with columns: sku_id, item_name, views, add_to_cart, purchases, revenue
+    """
+    client = get_ga4_client()
+    if client is None:
+        return None
+    
+    property_id = GA4_PROPERTIES.get(brand, '')
+    if not property_id:
+        print(f"❌ GA4 property ID not set for brand: {brand}")
+        return None
+    
+    try:
+        request = RunReportRequest(
+            property=f"properties/{property_id}",
+            dimensions=[
+                Dimension(name="itemId"),
+                Dimension(name="itemName"),
+            ],
+            metrics=[
+                Metric(name="itemsViewed"),
+                Metric(name="itemsAddedToCart"),
+                Metric(name="itemsPurchased"),
+                Metric(name="itemRevenue"),
+            ],
+            date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
+        )
+        
+        response = client.run_report(request)
+        
+        # レスポンスをDataFrameに変換
+        rows = []
+        for row in response.rows:
+            rows.append({
+                'sku_id': row.dimension_values[0].value,
+                'item_name': row.dimension_values[1].value,
+                'views': int(row.metric_values[0].value),
+                'add_to_cart': int(row.metric_values[1].value),
+                'purchases': int(row.metric_values[2].value),
+                'revenue': float(row.metric_values[3].value),
+            })
+        
+        df = pd.DataFrame(rows)
+        print(f"✅ Fetched {len(df)} items from GA4 for {brand} ({start_date} to {end_date})")
+        return df
+    
+    except Exception as e:
+        print(f"❌ Error fetching GA4 data for {brand}: {e}")
+        return None
+
+
+def fetch_yesterday_data(brand: str) -> dict:
+    """前日のデータを取得"""
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    df = fetch_ecommerce_data(brand, yesterday, yesterday)
+    
+    if df is not None:
+        return {
+            'data': df,
+            'period': {
+                'start_date': datetime.strptime(yesterday, '%Y-%m-%d'),
+                'end_date': datetime.strptime(yesterday, '%Y-%m-%d'),
+                'days': 1,
+                'period_type': 'daily'
+            }
+        }
+    return None
+
+
+def fetch_weekly_data(brand: str) -> dict:
+    """過去7日間のデータを取得"""
+    end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+    df = fetch_ecommerce_data(brand, start_date, end_date)
+    
+    if df is not None:
+        return {
+            'data': df,
+            'period': {
+                'start_date': datetime.strptime(start_date, '%Y-%m-%d'),
+                'end_date': datetime.strptime(end_date, '%Y-%m-%d'),
+                'days': 7,
+                'period_type': 'weekly'
+            }
+        }
+    return None
+
+
+def fetch_custom_data(brand: str, start_date: str, end_date: str) -> dict:
+    """カスタム期間のデータを取得"""
+    df = fetch_ecommerce_data(brand, start_date, end_date)
+    
+    if df is not None:
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        days = (end_dt - start_dt).days + 1
+        
+        return {
+            'data': df,
+            'period': {
+                'start_date': start_dt,
+                'end_date': end_dt,
+                'days': days,
+                'period_type': 'weekly' if days == 7 else 'daily' if days == 1 else 'custom'
+            }
+        }
+    return None
+
+
+def fetch_all_brands_data(period_type: str = 'yesterday') -> dict:
+    """
+    全ブランドのデータを取得
+    
+    Args:
+        period_type: 'yesterday' or 'weekly'
+    
+    Returns:
+        dict: {brand: {'data': df, 'period': {...}}, ...}
+    """
+    results = {}
+    
+    for brand in GA4_PROPERTIES.keys():
+        if not GA4_PROPERTIES[brand]:
+            print(f"⚠️ Skipping {brand} - no property ID configured")
+            continue
+        
+        if period_type == 'yesterday':
+            result = fetch_yesterday_data(brand)
+        else:
+            result = fetch_weekly_data(brand)
+        
+        if result is not None:
+            results[brand] = result
+    
+    return results
+
+
+def is_ga4_configured() -> bool:
+    """GA4 APIが設定されているかチェック"""
+    if not GA4_CREDENTIALS_JSON:
+        return False
+    
+    # 少なくとも1つのプロパティIDが設定されているか
+    return any(GA4_PROPERTIES.values())
+
+
+def get_configured_brands() -> list:
+    """設定済みのブランド一覧を取得"""
+    return [brand for brand, prop_id in GA4_PROPERTIES.items() if prop_id]
+

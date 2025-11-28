@@ -19,6 +19,16 @@ try:
 except ImportError:
     R2_ENABLED = False
 
+# GA4 API連携
+try:
+    from ga4_api import (
+        is_ga4_configured, get_configured_brands, 
+        fetch_yesterday_data, fetch_weekly_data, fetch_all_brands_data
+    )
+    GA4_API_ENABLED = is_ga4_configured()
+except ImportError:
+    GA4_API_ENABLED = False
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
@@ -535,7 +545,8 @@ def upload():
                          ga_status=ga_status,
                          brands=BRANDS,
                          r2_enabled=R2_ENABLED,
-                         r2_product_info=r2_product_info)
+                         r2_product_info=r2_product_info,
+                         ga4_api_enabled=GA4_API_ENABLED)
 
 
 @app.route('/sync-r2', methods=['POST'])
@@ -558,6 +569,41 @@ def sync_r2():
             flash('R2に商品マスタが見つかりません', 'error')
     except Exception as e:
         flash(f'R2同期エラー: {str(e)}', 'error')
+    
+    return redirect(url_for('upload'))
+
+
+@app.route('/fetch-ga4', methods=['POST'])
+def fetch_ga4():
+    """GA4 APIからデータを取得"""
+    if not GA4_API_ENABLED:
+        flash('GA4 APIが設定されていません', 'error')
+        return redirect(url_for('upload'))
+    
+    period_type = request.form.get('period_type', 'yesterday')  # 'yesterday' or 'weekly'
+    
+    try:
+        results = fetch_all_brands_data(period_type)
+        
+        if not results:
+            flash('GA4からデータを取得できませんでした', 'error')
+            return redirect(url_for('upload'))
+        
+        # 取得したデータをdata_storeに保存
+        for brand, result in results.items():
+            data_store['ga_sales'][brand] = result
+            period = result['period']
+            period_str = f"（{period['start_date'].strftime('%m/%d')}〜{period['end_date'].strftime('%m/%d')}）"
+            flash(f'{brand.upper()} GA4データを取得しました（{len(result["data"])}件）{period_str}', 'success')
+        
+        # 商品マスタがあれば分析実行
+        if data_store['product_master'] is not None:
+            merge_and_analyze()
+            flash('データの突合・分析が完了しました！', 'success')
+            return redirect(url_for('index'))
+        
+    except Exception as e:
+        flash(f'GA4データ取得エラー: {str(e)}', 'error')
     
     return redirect(url_for('upload'))
 
