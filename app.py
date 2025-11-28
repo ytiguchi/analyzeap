@@ -628,5 +628,32 @@ def api_products():
     return jsonify(products)
 
 
+def init_from_r2():
+    """起動時にR2から最新の商品マスタを読み込む"""
+    if not R2_ENABLED:
+        print("⚠️ R2 is not enabled. Set R2 environment variables to enable.")
+        return False
+    
+    try:
+        print("☁️ Loading product master from R2...")
+        df = download_product_master()
+        if df is not None and len(df) > 0:
+            data_store['product_master'] = process_product_master_df(df)
+            data_store['product_master_info'] = get_product_master_info()
+            print(f"✅ Loaded {len(data_store['product_master'])} products from R2")
+            return True
+        else:
+            print("⚠️ No product master found in R2")
+            return False
+    except Exception as e:
+        print(f"❌ Error loading from R2: {e}")
+        return False
+
+
+# アプリ起動時にR2から読み込み
+with app.app_context():
+    init_from_r2()
+
+
 if __name__ == '__main__':
     app.run(debug=True, port=5050)
