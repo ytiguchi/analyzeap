@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+
+{% block title %}ダッシュボード - 商品分析{% endblock %}
+
+{% block content %}
+{% if not has_data %}
+    <div class="card" style="text-align: center; padding: 4rem 2rem;">
+        <div style="font-size: 4rem; margin-bottom: 1rem;">📁</div>
+        <h2 style="margin-bottom: 1rem;">データをアップロードしてください</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+            商品マスタCSVとGA4売上CSVをアップロードすると、<br>
+            ブランド別の在庫×売上分析が開始されます。
+        </p>
+        <a href="{{ url_for('upload') }}" class="btn btn-primary">
+            📤 CSVをアップロード
+        </a>
+    </div>
+{% else %}
+    <!-- 分析期間バナー -->
+    {% if analysis_period %}
+    <div class="period-banner animate-in">
+        <div class="period-banner-icon">📊</div>
+        <div class="period-banner-content">
+            <div class="period-banner-title">分析期間</div>
+            <div class="period-banner-dates">
+                {% if analysis_period.min_start and analysis_period.max_end %}
+                    {{ analysis_period.min_start.strftime('%Y年%m月%d日') }}
+                    {% if analysis_period.min_start != analysis_period.max_end %}
+                        〜 {{ analysis_period.max_end.strftime('%m月%d日') }}
+                    {% endif %}
+                    <span class="period-days">（{{ analysis_period.total_days }}日間）</span>
+                {% else %}
+                    期間情報なし
+                {% endif %}
+            </div>
+        </div>
+        <div class="period-banner-brands">
+            {% for bp in analysis_period.brands %}
+                <div class="period-brand-chip {% if bp.period_type == 'daily' %}daily{% elif bp.period_type == 'weekly' %}weekly{% else %}custom{% endif %}">
+                    <span class="brand-name">{{ bp.brand }}</span>
+                    {% if bp.period_type == 'daily' %}📅{% elif bp.period_type == 'weekly' %}📆{% else %}📊{% endif %}
+                    {% if bp.start_date %}{{ bp.start_date.strftime('%m/%d') }}{% endif %}
+                    {% if bp.start_date != bp.end_date and bp.end_date %}〜{{ bp.end_date.strftime('%m/%d') }}{% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <a href="{{ url_for('upload') }}" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">
+            データ更新
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- PVランキング（昨日の閲覧数TOP） -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">
+                <span class="icon">🔥</span>
+                PVランキング TOP10
+            </h2>
+            <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=pv" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
+                もっと見る →
+            </a>
+        </div>
+
+        <div class="pv-ranking-grid animate-in">
+            {% for p in pv_ranking %}
+            <div class="pv-ranking-item" style="animation-delay: {{ loop.index * 0.05 }}s;">
+                <div class="pv-rank {% if loop.index <= 3 %}top-3{% endif %}">{{ loop.index }}</div>
+                <img src="{{ p.image_url or 'https://via.placeholder.com/80x80?text=No+Image' }}" 
+                     alt="{{ p.product_name }}" 
+                     class="pv-image"
+                     onerror="this.src='https://via.placeholder.com/80x80?text=No+Image'">
+                <div class="pv-info">
+                    <div class="pv-brand">{{ p.brand }}</div>
+                    <div class="pv-name">{{ p.product_name }}</div>
+                    <div class="pv-color">{{ p.color_name or '-' }}</div>
+                </div>
+                <div class="pv-stats">
+                    <div class="pv-stat">
+                        <span class="pv-stat-value">{{ "{:,}".format(p.views|int) }}</span>
+                        <span class="pv-stat-label">PV</span>
+                    </div>
+                    <div class="pv-stat">
+                        <span class="pv-stat-value {% if p.purchases > 0 %}success{% endif %}">{{ p.purchases|int }}</span>
+                        <span class="pv-stat-label">購入</span>
+                    </div>
+                    <div class="pv-stat">
+                        <span class="pv-stat-value {% if p.total_stock <= 5 %}danger{% endif %}">{{ p.total_stock|int }}</span>
+                        <span class="pv-stat-label">在庫</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- ブランド別サマリー -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">
+                <span class="icon">🏷️</span>
+                ブランド別サマリー
+            </h2>
+        </div>
+
+        <div class="table-container animate-in">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ブランド</th>
+                        <th>SKU数</th>
+                        <th>総在庫</th>
+                        <th>閲覧数</th>
+                        <th>購入数</th>
+                        <th>売上</th>
+                        <th>CVR</th>
+                        <th>問題商品</th>
+                        <th>機会損失</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for brand in summary %}
+                    <tr>
+                        <td style="font-family: 'Noto Sans JP', sans-serif; font-weight: 500;">
+                            {{ brand.brand or '(未設定)' }}
+                        </td>
+                        <td>{{ "{:,}".format(brand.sku_count|int) }}</td>
+                        <td>{{ "{:,}".format(brand.total_stock|int) }}</td>
+                        <td>{{ "{:,}".format(brand.total_views|int) }}</td>
+                        <td>{{ "{:,}".format(brand.total_purchases|int) }}</td>
+                        <td style="color: var(--accent-mint);">¥{{ "{:,.0f}".format(brand.total_revenue) }}</td>
+                        <td>{{ "%.2f"|format(brand.overall_cvr) }}%</td>
+                        <td>
+                            {% if brand.problem_count > 0 %}
+                                <span class="badge badge-danger">{{ brand.problem_count }}</span>
+                            {% else %}
+                                <span style="color: var(--text-muted);">0</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if brand.opportunity_count > 0 %}
+                                <span class="badge badge-warning">{{ brand.opportunity_count }}</span>
+                            {% else %}
+                                <span style="color: var(--text-muted);">0</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('brand_detail', brand_name=brand.brand or 'unknown') }}" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem;">
+                                詳細 →
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- クイックアクション -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">
+                <span class="icon">⚡</span>
+                クイック分析
+            </h2>
+        </div>
+
+        <div class="grid grid-4">
+            <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=pv" class="card animate-in delay-1" style="text-decoration: none;">
+                <div style="font-size: 2rem; margin-bottom: 0.75rem;">🔥</div>
+                <h3 style="color: var(--accent-purple); margin-bottom: 0.5rem; font-size: 1rem;">PVランキング</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;">
+                    閲覧数の多い人気商品
+                </p>
+            </a>
+
+            <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=problem" class="card animate-in delay-2" style="text-decoration: none;">
+                <div style="font-size: 2rem; margin-bottom: 0.75rem;">🚨</div>
+                <h3 style="color: var(--accent-coral); margin-bottom: 0.5rem; font-size: 1rem;">在庫過多×低売上</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;">
+                    在庫が多いのに売れていない
+                </p>
+            </a>
+
+            <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=opportunity" class="card animate-in delay-3" style="text-decoration: none;">
+                <div style="font-size: 2rem; margin-bottom: 0.75rem;">💡</div>
+                <h3 style="color: var(--accent-gold); margin-bottom: 0.5rem; font-size: 1rem;">機会損失</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;">
+                    閲覧多×在庫切れで売り逃し
+                </p>
+            </a>
+
+            <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=top" class="card animate-in delay-4" style="text-decoration: none;">
+                <div style="font-size: 2rem; margin-bottom: 0.75rem;">🏆</div>
+                <h3 style="color: var(--accent-mint); margin-bottom: 0.5rem; font-size: 1rem;">売上TOP</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;">
+                    売上上位の好調商品
+                </p>
+            </a>
+        </div>
+    </section>
+{% endif %}
+
+<style>
+/* 分析期間バナー */
+.period-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: linear-gradient(135deg, rgba(78, 205, 196, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+    border: 1px solid rgba(78, 205, 196, 0.3);
+    border-radius: 16px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.period-banner-icon {
+    font-size: 2rem;
+}
+
+.period-banner-content {
+    flex: 1;
+    min-width: 200px;
+}
+
+.period-banner-title {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.period-banner-dates {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.period-days {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.period-banner-brands {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.period-brand-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.period-brand-chip.daily {
+    background: rgba(168, 85, 247, 0.15);
+    color: var(--accent-purple);
+}
+
+.period-brand-chip.weekly {
+    background: rgba(78, 205, 196, 0.15);
+    color: var(--accent-mint);
+}
+
+.period-brand-chip.custom {
+    background: rgba(255, 217, 61, 0.15);
+    color: var(--accent-gold);
+}
+
+.period-brand-chip .brand-name {
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+/* PVランキング */
+.pv-ranking-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.pv-ranking-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+    animation: fadeIn 0.4s ease forwards;
+    opacity: 0;
+}
+
+.pv-ranking-item:hover {
+    background: var(--bg-card-hover);
+    transform: translateX(4px);
+    border-color: var(--accent-mint);
+}
+
+.pv-rank {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+}
+
+.pv-rank.top-3 {
+    background: var(--gradient-warm);
+    color: var(--bg-primary);
+}
+
+.pv-image {
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: var(--bg-secondary);
+}
+
+.pv-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.pv-brand {
+    font-size: 0.7rem;
+    color: var(--accent-mint);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pv-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pv-color {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.pv-stats {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.pv-stat {
+    text-align: center;
+}
+
+.pv-stat-value {
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+}
+
+.pv-stat-value.success { color: var(--accent-mint); }
+.pv-stat-value.danger { color: var(--accent-coral); }
+
+.pv-stat-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+@media (max-width: 768px) {
+    .period-banner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .pv-stats {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .pv-stat {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+}
+</style>
+{% endblock %}

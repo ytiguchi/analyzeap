@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}データアップロード - 商品分析{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-header">
+        <h2 class="section-title">
+            <span class="icon">📤</span>
+            データアップロード
+        </h2>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data">
+        <!-- 商品マスタ（全ブランド共通） -->
+        <div class="card animate-in" style="margin-bottom: 2rem;">
+            <div class="card-header">
+                <h3 class="card-title">📦 商品マスタCSV（全ブランド共通）</h3>
+                {% if has_product %}
+                    <span class="badge badge-success">✓ 読込済</span>
+                {% endif %}
+            </div>
+            
+            <!-- R2ストレージ情報 -->
+            {% if r2_enabled %}
+            <div class="r2-status" style="margin-bottom: 1rem;">
+                <div class="r2-badge">
+                    <span class="r2-icon">☁️</span>
+                    <span>Cloudflare R2 連携中</span>
+                </div>
+                {% if r2_product_info and r2_product_info.exists %}
+                    <div class="r2-info">
+                        <span>最終更新: {{ r2_product_info.last_modified.strftime('%Y/%m/%d %H:%M') }}</span>
+                        <form method="POST" action="{{ url_for('sync_r2') }}" style="display: inline;">
+                            <button type="submit" class="btn-sync">🔄 R2から同期</button>
+                        </form>
+                    </div>
+                {% else %}
+                    <div class="r2-info" style="color: var(--text-muted);">
+                        R2に商品マスタがありません
+                    </div>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                全ブランドの在庫・カラー・画像URLなどを含む商品データ
+                {% if r2_enabled %}<br><small style="color: var(--accent-mint);">※アップロードするとR2にも自動保存されます</small>{% endif %}
+            </p>
+            
+            <div class="file-upload" onclick="document.getElementById('product_csv').click()">
+                <input type="file" name="product_csv" id="product_csv" accept=".csv" style="display: none;" onchange="updateFileName(this, 'product_filename')">
+                <div class="file-upload-icon">📁</div>
+                <p id="product_filename" class="file-upload-text">クリックしてCSVを選択</p>
+            </div>
+        </div>
+
+        <!-- ブランド別GA売上 -->
+        <div class="card animate-in delay-1">
+            <div class="card-header">
+                <h3 class="card-title">📊 GA4売上CSV（ブランド別）</h3>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                各ブランドのGA4プロパティからエクスポートしたEコマース購入データ
+            </p>
+
+            <div class="brand-upload-grid">
+                {% for brand in brands %}
+                <div class="brand-upload-item {% if ga_status[brand].loaded %}loaded{% endif %}">
+                    <div class="brand-header">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="brand-icon">
+                                {% if brand == 'rady' %}👗
+                                {% elif brand == 'cherimi' %}🌸
+                                {% elif brand == 'michellmacaron' %}🎀
+                                {% elif brand == 'radycharm' %}✨
+                                {% else %}🏷️
+                                {% endif %}
+                            </span>
+                            <span style="font-weight: 600; text-transform: uppercase;">{{ brand }}</span>
+                        </div>
+                        {% if ga_status[brand].loaded %}
+                            <span class="badge badge-success" style="font-size: 0.7rem;">✓ 読込済</span>
+                        {% else %}
+                            <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted); font-size: 0.7rem;">未読込</span>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- 期間情報表示 -->
+                    {% if ga_status[brand].loaded and ga_status[brand].period %}
+                        {% set period = ga_status[brand].period %}
+                        <div class="period-info">
+                            {% if period.start_date and period.end_date %}
+                                <div class="period-badge {% if period.period_type == 'daily' %}daily{% elif period.period_type == 'weekly' %}weekly{% else %}custom{% endif %}">
+                                    {% if period.period_type == 'daily' %}
+                                        📅 日次
+                                    {% elif period.period_type == 'weekly' %}
+                                        📆 週次
+                                    {% elif period.period_type == 'monthly' %}
+                                        🗓️ 月次
+                                    {% else %}
+                                        📊 {{ period.days }}日間
+                                    {% endif %}
+                                </div>
+                                <div class="period-dates">
+                                    {{ period.start_date.strftime('%Y/%m/%d') }}
+                                    {% if period.start_date != period.end_date %}
+                                        〜 {{ period.end_date.strftime('%m/%d') }}
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                            <div class="period-count">{{ ga_status[brand].count }}件</div>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="file-upload-small" onclick="document.getElementById('ga_csv_{{ brand }}').click()">
+                        <input type="file" name="ga_csv_{{ brand }}" id="ga_csv_{{ brand }}" accept=".csv" style="display: none;" onchange="updateFileName(this, 'ga_filename_{{ brand }}')">
+                        <p id="ga_filename_{{ brand }}" class="file-upload-text-small">
+                            {% if ga_status[brand].loaded %}新しいCSVで更新{% else %}CSVを選択{% endif %}
+                        </p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 2rem;">
+            <button type="submit" class="btn btn-primary" style="padding: 1rem 3rem; font-size: 1.1rem;">
+                🚀 アップロード＆分析開始
+            </button>
+        </div>
+    </form>
+</section>
+
+<section class="section">
+    <div class="card">
+        <h3 class="card-title" style="margin-bottom: 1rem;">💡 使い方</h3>
+        <ol style="color: var(--text-secondary); line-height: 2.2;">
+            <li><strong>商品マスタCSV</strong>（全ブランド合計）をアップロード{% if r2_enabled %}（R2に自動保存）{% endif %}</li>
+            <li>各ブランドのGA4プロパティから<strong>Eコマース購入レポート</strong>をCSVエクスポート</li>
+            <li>対応するブランド欄にCSVをアップロード</li>
+            <li>「アップロード＆分析開始」をクリック</li>
+        </ol>
+        {% if r2_enabled %}
+        <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 12px;">
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0;">
+                ☁️ <strong>R2ストレージ連携:</strong> 商品マスタはCloudflare R2に保存されます。<br>
+                スタッフが最新の商品マスタをR2にアップロードすれば、「R2から同期」で取得できます。
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<style>
+.brand-upload-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.brand-upload-item {
+    background: var(--bg-secondary);
+    border-radius: 16px;
+    padding: 1.25rem;
+    border: 2px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.brand-upload-item:hover {
+    border-color: var(--accent-pink);
+    transform: translateY(-2px);
+}
+
+.brand-upload-item.loaded {
+    border-color: var(--accent-mint);
+    background: linear-gradient(135deg, rgba(157, 196, 176, 0.1) 0%, rgba(157, 196, 176, 0.05) 100%);
+}
+
+.brand-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.brand-icon {
+    font-size: 1.25rem;
+}
+
+.period-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    background: var(--bg-card);
+    border-radius: 10px;
+    flex-wrap: wrap;
+}
+
+.period-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+}
+
+.period-badge.daily {
+    background: rgba(201, 184, 217, 0.3);
+    color: #8B6FA8;
+}
+
+.period-badge.weekly {
+    background: rgba(157, 196, 176, 0.3);
+    color: #5A8A6F;
+}
+
+.period-badge.custom {
+    background: rgba(229, 193, 133, 0.3);
+    color: #B8944A;
+}
+
+.period-dates {
+    font-size: 0.85rem;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.period-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+/* ファイルアップロード */
+.file-upload {
+    border: 2px dashed var(--accent-peach);
+    border-radius: 16px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: linear-gradient(135deg, rgba(255, 205, 178, 0.1) 0%, rgba(232, 164, 164, 0.05) 100%);
+}
+
+.file-upload:hover {
+    border-color: var(--accent-pink);
+    background: linear-gradient(135deg, rgba(232, 164, 164, 0.15) 0%, rgba(255, 205, 178, 0.1) 100%);
+    transform: translateY(-2px);
+}
+
+.file-upload-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.file-upload-text {
+    color: var(--text-secondary);
+    margin: 0;
+    font-weight: 500;
+}
+
+.file-upload-small {
+    border: 2px dashed var(--border-color);
+    border-radius: 10px;
+    padding: 0.85rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.file-upload-small:hover {
+    border-color: var(--accent-pink);
+    background: rgba(232, 164, 164, 0.08);
+}
+
+.file-upload-text-small {
+    color: var(--text-muted);
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+/* R2ストレージUI */
+.r2-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.1rem;
+    background: linear-gradient(135deg, rgba(201, 184, 217, 0.15) 0%, rgba(201, 184, 217, 0.08) 100%);
+    border: 1px solid var(--accent-lavender);
+    border-radius: 12px;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.r2-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #8B6FA8;
+}
+
+.r2-icon {
+    font-size: 1.1rem;
+}
+
+.r2-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.btn-sync {
+    background: var(--gradient-dream);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-family: inherit;
+}
+
+.btn-sync:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(201, 184, 217, 0.4);
+}
+</style>
+
+<script>
+function updateFileName(input, targetId) {
+    const target = document.getElementById(targetId);
+    if (input.files.length > 0) {
+        target.textContent = input.files[0].name;
+        target.style.color = 'var(--accent-rose)';
+        target.style.fontWeight = '600';
+        input.parentElement.style.borderColor = 'var(--accent-pink)';
+        input.parentElement.style.background = 'linear-gradient(135deg, rgba(232, 164, 164, 0.15) 0%, rgba(255, 205, 178, 0.1) 100%)';
+    }
+}
+
+// ドラッグ&ドロップ対応
+document.querySelectorAll('.file-upload, .file-upload-small').forEach(el => {
+    el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        el.style.borderColor = 'var(--accent-pink)';
+        el.style.background = 'linear-gradient(135deg, rgba(232, 164, 164, 0.2) 0%, rgba(255, 205, 178, 0.15) 100%)';
+    });
+    el.addEventListener('dragleave', () => {
+        el.style.borderColor = '';
+        el.style.background = '';
+    });
+    el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const input = el.querySelector('input[type="file"]');
+        input.files = e.dataTransfer.files;
+        input.dispatchEvent(new Event('change'));
+    });
+});
+</script>
+{% endblock %}
