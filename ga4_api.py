@@ -17,26 +17,46 @@ from google.analytics.data_v1beta.types import (
 from google.oauth2 import service_account
 import pandas as pd
 
-# GA4 プロパティID（ブランド別）- 環境変数から取得
-GA4_PROPERTIES = {
-    'rady': os.environ.get('GA4_PROPERTY_RADY', ''),
-    'cherimi': os.environ.get('GA4_PROPERTY_CHERIMI', ''),
-    'michellmacaron': os.environ.get('GA4_PROPERTY_MICHELLMACARON', ''),
-    'radycharm': os.environ.get('GA4_PROPERTY_RADYCHARM', ''),
-}
 
-# サービスアカウント認証情報（環境変数からJSON文字列として取得）
-GA4_CREDENTIALS_JSON = os.environ.get('GA4_CREDENTIALS_JSON', '')
+def get_ga4_config():
+    """GA4設定を取得（呼び出し時に環境変数を読む）"""
+    return {
+        'credentials_json': os.environ.get('GA4_CREDENTIALS_JSON', ''),
+        'properties': {
+            'rady': os.environ.get('GA4_PROPERTY_RADY', ''),
+            'cherimi': os.environ.get('GA4_PROPERTY_CHERIMI', ''),
+            'michellmacaron': os.environ.get('GA4_PROPERTY_MICHELLMACARON', ''),
+            'radycharm': os.environ.get('GA4_PROPERTY_RADYCHARM', ''),
+        }
+    }
+
+
+def is_ga4_configured() -> bool:
+    """GA4 APIが設定されているかチェック"""
+    config = get_ga4_config()
+    if not config['credentials_json']:
+        return False
+    
+    # 少なくとも1つのプロパティIDが設定されているか
+    return any(config['properties'].values())
+
+
+def get_configured_brands() -> list:
+    """設定済みのブランド一覧を取得"""
+    config = get_ga4_config()
+    return [brand for brand, prop_id in config['properties'].items() if prop_id]
 
 
 def get_ga4_client():
     """GA4 APIクライアントを取得"""
-    if not GA4_CREDENTIALS_JSON:
+    config = get_ga4_config()
+    
+    if not config['credentials_json']:
         print("❌ GA4_CREDENTIALS_JSON not set")
         return None
     
     try:
-        credentials_info = json.loads(GA4_CREDENTIALS_JSON)
+        credentials_info = json.loads(config['credentials_json'])
         credentials = service_account.Credentials.from_service_account_info(
             credentials_info,
             scopes=['https://www.googleapis.com/auth/analytics.readonly']
@@ -64,7 +84,9 @@ def fetch_ecommerce_data(brand: str, start_date: str, end_date: str) -> pd.DataF
     if client is None:
         return None
     
-    property_id = GA4_PROPERTIES.get(brand, '')
+    config = get_ga4_config()
+    property_id = config['properties'].get(brand, '')
+    
     if not property_id:
         print(f"❌ GA4 property ID not set for brand: {brand}")
         return None
@@ -176,10 +198,11 @@ def fetch_all_brands_data(period_type: str = 'yesterday') -> dict:
     Returns:
         dict: {brand: {'data': df, 'period': {...}}, ...}
     """
+    config = get_ga4_config()
     results = {}
     
-    for brand in GA4_PROPERTIES.keys():
-        if not GA4_PROPERTIES[brand]:
+    for brand, prop_id in config['properties'].items():
+        if not prop_id:
             print(f"⚠️ Skipping {brand} - no property ID configured")
             continue
         
@@ -192,18 +215,3 @@ def fetch_all_brands_data(period_type: str = 'yesterday') -> dict:
             results[brand] = result
     
     return results
-
-
-def is_ga4_configured() -> bool:
-    """GA4 APIが設定されているかチェック"""
-    if not GA4_CREDENTIALS_JSON:
-        return False
-    
-    # 少なくとも1つのプロパティIDが設定されているか
-    return any(GA4_PROPERTIES.values())
-
-
-def get_configured_brands() -> list:
-    """設定済みのブランド一覧を取得"""
-    return [brand for brand, prop_id in GA4_PROPERTIES.items() if prop_id]
-

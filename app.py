@@ -32,9 +32,12 @@ try:
         is_ga4_configured, get_configured_brands, 
         fetch_yesterday_data, fetch_weekly_data, fetch_all_brands_data
     )
-    GA4_API_ENABLED = is_ga4_configured()
 except ImportError:
-    GA4_API_ENABLED = False
+    is_ga4_configured = lambda: False
+    get_configured_brands = lambda: []
+    fetch_yesterday_data = None
+    fetch_weekly_data = None
+    fetch_all_brands_data = None
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -553,7 +556,7 @@ def upload():
                          brands=BRANDS,
                          r2_enabled=is_r2_enabled(),
                          r2_product_info=r2_product_info,
-                         ga4_api_enabled=GA4_API_ENABLED)
+                         ga4_api_enabled=is_ga4_configured())
 
 
 @app.route('/sync-r2', methods=['POST'])
@@ -583,7 +586,7 @@ def sync_r2():
 @app.route('/fetch-ga4', methods=['POST'])
 def fetch_ga4():
     """GA4 APIからデータを取得"""
-    if not GA4_API_ENABLED:
+    if not is_ga4_configured():
         flash('GA4 APIが設定されていません', 'error')
         return redirect(url_for('upload'))
     
