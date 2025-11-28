@@ -114,14 +114,19 @@ def get_product_master_info():
     """商品マスタの情報を取得"""
     client = get_r2_client()
     if client is None:
-        return None
+        print("❌ get_product_master_info: R2 client is None")
+        return {'exists': False}
     
     try:
+        print(f"📂 Checking R2: {R2_BUCKET_NAME}/{R2_PRODUCT_MASTER_KEY}")
         response = client.head_object(Bucket=R2_BUCKET_NAME, Key=R2_PRODUCT_MASTER_KEY)
-        return {
+        info = {
             'size': response['ContentLength'],
             'last_modified': response['LastModified'],
             'exists': True
         }
-    except:
+        print(f"✅ Found: {info}")
+        return info
+    except Exception as e:
+        print(f"❌ get_product_master_info error: {e}")
         return {'exists': False}
