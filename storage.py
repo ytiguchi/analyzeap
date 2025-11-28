@@ -47,7 +47,7 @@ def is_r2_enabled():
 
 
 def find_latest_csv():
-    """R2バケット内の最新のCSVファイルを見つける"""
+    """R2バケット内の最新の商品マスタCSVファイルを見つける（ga4_data/は除外）"""
     client = get_r2_client()
     if client is None:
         return None
@@ -59,7 +59,8 @@ def find_latest_csv():
         csv_files = []
         for obj in response.get('Contents', []):
             key = obj['Key']
-            if key.endswith('.csv'):
+            # ga4_data/ フォルダは除外（商品マスタのみ対象）
+            if key.endswith('.csv') and not key.startswith('ga4_data/'):
                 csv_files.append({
                     'key': key,
                     'last_modified': obj['LastModified'],
@@ -67,12 +68,12 @@ def find_latest_csv():
                 })
         
         if not csv_files:
-            print("❌ No CSV files found in R2")
+            print("❌ No product master CSV files found in R2")
             return None
         
         # 最新のファイルを取得
         latest = max(csv_files, key=lambda x: x['last_modified'])
-        print(f"✅ Found latest CSV: {latest['key']} (modified: {latest['last_modified']})")
+        print(f"✅ Found product master CSV: {latest['key']} (modified: {latest['last_modified']})")
         return latest
     except Exception as e:
         print(f"❌ Error finding latest CSV: {e}")
@@ -160,6 +161,86 @@ def list_r2_files():
     except Exception as e:
         print(f"Error listing R2 files: {e}")
         return []
+
+
+def save_ga4_data(brand, df, start_date, end_date):
+    """GA4データをR2に保存"""
+    client = get_r2_client()
+    if client is None:
+        print("R2 credentials not configured, skipping GA4 data save")
+        return False
+    
+    config = get_r2_config()
+    
+    try:
+        # ファイル名: ga4_data/brand_YYYYMMDD_YYYYMMDD.csv
+        filename = f"ga4_data/{brand}_{start_date}_{end_date}.csv"
+        
+        # DataFrameをCSVに変換
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        
+        client.put_object(
+            Bucket=config['bucket_name'],
+            Key=filename,
+            Body=csv_buffer.getvalue().encode('utf-8'),
+            ContentType='text/csv'
+        )
+        print(f"✅ Saved GA4 data to R2: {filename} ({len(df)} rows)")
+        return True
+    except Exception as e:
+        print(f"❌ Error saving GA4 data to R2: {e}")
+        return False
+
+
+def get_latest_ga4_data(brand):
+    """R2から最新のGA4データを取得"""
+    client = get_r2_client()
+    if client is None:
+        return None
+    
+    config = get_r2_config()
+    
+    try:
+        # ga4_data/ フォルダ内のファイルを検索
+        response = client.list_objects_v2(
+            Bucket=config['bucket_name'],
+            Prefix=f"ga4_data/{brand}_"
+        )
+        
+        files = []
+        for obj in response.get('Contents', []):
+            files.append({
+                'key': obj['Key'],
+                'last_modified': obj['LastModified']
+            })
+        
+        if not files:
+            return None
+        
+        # 最新のファイルを取得
+        latest = max(files, key=lambda x: x['last_modified'])
+        
+        response = client.get_object(Bucket=config['bucket_name'], Key=latest['key'])
+        content = response['Body'].read().decode('utf-8')
+        df = pd.read_csv(StringIO(content))
+        
+        # ファイル名から日付を抽出
+        filename = latest['key'].split('/')[-1]  # brand_YYYYMMDD_YYYYMMDD.csv
+        parts = filename.replace('.csv', '').split('_')
+        start_date = parts[-2] if len(parts) >= 3 else None
+        end_date = parts[-1] if len(parts) >= 3 else None
+        
+        print(f"✅ Loaded GA4 data from R2: {brand} ({len(df)} rows)")
+        return {
+            'df': df,
+            'start_date': start_date,
+            'end_date': end_date,
+            'last_modified': latest['last_modified']
+        }
+    except Exception as e:
+        print(f"❌ Error loading GA4 data from R2: {e}")
+        return None
 
 
 def get_product_master_info():

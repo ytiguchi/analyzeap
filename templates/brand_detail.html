@@ -68,6 +68,7 @@
 
     <!-- アラートサマリー -->
     <div class="grid grid-2" style="margin-bottom: 2rem;">
+        {# 在庫過多×低売上 - 設計見直し中のため一時的に非表示
         <div class="card" style="border-left: 4px solid var(--accent-coral);">
             <div style="display: flex; align-items: center; gap: 1rem;">
                 <span style="font-size: 2rem;">🚨</span>
@@ -77,6 +78,7 @@
                 </div>
             </div>
         </div>
+        #}
         <div class="card" style="border-left: 4px solid var(--accent-gold);">
             <div style="display: flex; align-items: center; gap: 1rem;">
                 <span style="font-size: 2rem;">💡</span>
@@ -95,9 +97,11 @@
         <button class="tab" data-tab="pv" onclick="switchTab('pv')">
             🔥 PVランキング ({{ pv_ranking|length }})
         </button>
+        {# 在庫過多×低売上 - 設計見直し中のため一時的に非表示
         <button class="tab" data-tab="problem" onclick="switchTab('problem')">
             🚨 在庫過多×低売上 ({{ problem_products|length }})
         </button>
+        #}
         <button class="tab" data-tab="opportunity" onclick="switchTab('opportunity')">
             💡 機会損失 ({{ opportunity_products|length }})
         </button>
@@ -204,7 +208,7 @@
         {% endif %}
     </div>
 
-    <!-- 在庫過多×低売上 -->
+    {# 在庫過多×低売上 - 設計見直し中のため一時的に非表示
     <div id="tab-problem" class="tab-content" style="display: none;">
         {% if problem_products %}
             <div class="product-grid">
@@ -253,6 +257,7 @@
             </div>
         {% endif %}
     </div>
+    #}
 
     <!-- 機会損失 -->
     <div id="tab-opportunity" class="tab-content" style="display: none;">

@@ -26,7 +26,7 @@ def get_ga4_config():
             'rady': os.environ.get('GA4_PROPERTY_RADY', ''),
             'cherimi': os.environ.get('GA4_PROPERTY_CHERIMI', ''),
             'michellmacaron': os.environ.get('GA4_PROPERTY_MICHELLMACARON', ''),
-            'radycharm': os.environ.get('GA4_PROPERTY_RADYCHARM', ''),
+            'solni': os.environ.get('GA4_PROPERTY_SOLNI', ''),
         }
     }
 

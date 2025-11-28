@@ -34,64 +34,81 @@
                 {% endif %}
             </div>
         </div>
-        <div class="period-banner-brands">
-            {% for bp in analysis_period.brands %}
-                <div class="period-brand-chip {% if bp.period_type == 'daily' %}daily{% elif bp.period_type == 'weekly' %}weekly{% else %}custom{% endif %}">
-                    <span class="brand-name">{{ bp.brand }}</span>
-                    {% if bp.period_type == 'daily' %}📅{% elif bp.period_type == 'weekly' %}📆{% else %}📊{% endif %}
-                    {% if bp.start_date %}{{ bp.start_date.strftime('%m/%d') }}{% endif %}
-                    {% if bp.start_date != bp.end_date and bp.end_date %}〜{{ bp.end_date.strftime('%m/%d') }}{% endif %}
-                </div>
-            {% endfor %}
-        </div>
         <a href="{{ url_for('upload') }}" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">
-            データ更新
+            🔄 更新
         </a>
     </div>
     {% endif %}
 
-    <!-- PVランキング（昨日の閲覧数TOP） -->
+    <!-- PVランキング（ブランド別） -->
     <section class="section">
         <div class="section-header">
             <h2 class="section-title">
                 <span class="icon">🔥</span>
-                PVランキング TOP10
+                PVランキング
             </h2>
-            <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=pv" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
-                もっと見る →
-            </a>
         </div>
 
-        <div class="pv-ranking-grid animate-in">
-            {% for p in pv_ranking %}
-            <div class="pv-ranking-item" style="animation-delay: {{ loop.index * 0.05 }}s;">
-                <div class="pv-rank {% if loop.index <= 3 %}top-3{% endif %}">{{ loop.index }}</div>
-                <img src="{{ p.image_url or 'https://via.placeholder.com/80x80?text=No+Image' }}" 
-                     alt="{{ p.product_name }}" 
-                     class="pv-image"
-                     onerror="this.src='https://via.placeholder.com/80x80?text=No+Image'">
-                <div class="pv-info">
-                    <div class="pv-brand">{{ p.brand }}</div>
-                    <div class="pv-name">{{ p.product_name }}</div>
-                    <div class="pv-color">{{ p.color_name or '-' }}</div>
-                </div>
-                <div class="pv-stats">
-                    <div class="pv-stat">
-                        <span class="pv-stat-value">{{ "{:,}".format(p.views|int) }}</span>
-                        <span class="pv-stat-label">PV</span>
-                    </div>
-                    <div class="pv-stat">
-                        <span class="pv-stat-value {% if p.purchases > 0 %}success{% endif %}">{{ p.purchases|int }}</span>
-                        <span class="pv-stat-label">購入</span>
-                    </div>
-                    <div class="pv-stat">
-                        <span class="pv-stat-value {% if p.total_stock <= 5 %}danger{% endif %}">{{ p.total_stock|int }}</span>
-                        <span class="pv-stat-label">在庫</span>
-                    </div>
-                </div>
-            </div>
+        <!-- ブランドタブ -->
+        <div class="brand-tabs">
+            {% for brand_name in pv_ranking_by_brand.keys() %}
+            <button class="brand-tab {% if loop.first %}active{% endif %}" 
+                    onclick="switchBrandTab('{{ brand_name }}')"
+                    data-brand="{{ brand_name }}">
+                {% if brand_name == 'Rady' %}👗
+                {% elif brand_name == 'cherimi' %}🌸
+                {% elif brand_name == 'michellMacaron' %}🎀
+                {% elif brand_name == 'SOLNI' %}💎
+                {% else %}🏷️
+                {% endif %}
+                {{ brand_name }}
+            </button>
             {% endfor %}
         </div>
+
+        <!-- ブランド別コンテンツ -->
+        {% for brand_name, products in pv_ranking_by_brand.items() %}
+        <div class="brand-pv-content {% if loop.first %}active{% endif %}" id="pv-{{ brand_name }}">
+            <div class="pv-grid">
+                {% for p in products %}
+                <div class="pv-card animate-in" style="animation-delay: {{ loop.index * 0.02 }}s;">
+                    <div class="pv-card-rank {% if loop.index <= 3 %}top-rank{% endif %}">{{ loop.index }}</div>
+                    <a href="{{ p.product_url or '#' }}" target="_blank" rel="noopener" class="pv-card-link">
+                        <img src="{{ p.image_url or 'https://via.placeholder.com/120x120?text=No+Image' }}" 
+                             alt="{{ p.product_name }}" 
+                             class="pv-card-image"
+                             onerror="this.src='https://via.placeholder.com/120x120?text=No+Image'">
+                    </a>
+                    <div class="pv-card-info">
+                        <div class="pv-card-name">{{ p.product_name }}</div>
+                        <div class="pv-card-metrics">
+                            <div class="metric">
+                                <span class="metric-value pv-value">{{ "{:,}".format(p.views|int) }}</span>
+                                <span class="metric-label">PV</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-value {% if (p.purchase_rate or 0) >= 1 %}high-cvr{% endif %}">{{ "%.2f"|format(p.purchase_rate or 0) }}%</span>
+                                <span class="metric-label">CVR</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-value {% if (p.purchases or 0) > 0 %}has-purchase{% endif %}">{{ p.purchases|int }}</span>
+                                <span class="metric-label">購入</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-value {% if (p.total_stock or 0) <= 10 %}low-stock{% endif %}">{{ p.total_stock|int }}</span>
+                                <span class="metric-label">在庫</span>
+                            </div>
+                            <div class="metric revenue-metric">
+                                <span class="metric-value revenue-value">¥{{ "{:,.0f}".format(p.revenue or 0) }}</span>
+                                <span class="metric-label">売上</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
     </section>
 
     <!-- ブランド別サマリー -->
@@ -114,7 +131,7 @@
                         <th>購入数</th>
                         <th>売上</th>
                         <th>CVR</th>
-                        <th>問題商品</th>
+                        {# <th>問題商品</th> #}
                         <th>機会損失</th>
                         <th></th>
                     </tr>
@@ -131,6 +148,7 @@
                         <td>{{ "{:,}".format(brand.total_purchases|int) }}</td>
                         <td style="color: var(--accent-mint);">¥{{ "{:,.0f}".format(brand.total_revenue) }}</td>
                         <td>{{ "%.2f"|format(brand.overall_cvr) }}%</td>
+                        {#
                         <td>
                             {% if brand.problem_count > 0 %}
                                 <span class="badge badge-danger">{{ brand.problem_count }}</span>
@@ -138,6 +156,7 @@
                                 <span style="color: var(--text-muted);">0</span>
                             {% endif %}
                         </td>
+                        #}
                         <td>
                             {% if brand.opportunity_count > 0 %}
                                 <span class="badge badge-warning">{{ brand.opportunity_count }}</span>
@@ -175,6 +194,7 @@
                 </p>
             </a>
 
+            {# 在庫過多×低売上 - 設計見直し中のため一時的に非表示
             <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=problem" class="card animate-in delay-2" style="text-decoration: none;">
                 <div style="font-size: 2rem; margin-bottom: 0.75rem;">🚨</div>
                 <h3 style="color: var(--accent-coral); margin-bottom: 0.5rem; font-size: 1rem;">在庫過多×低売上</h3>
@@ -182,6 +202,7 @@
                     在庫が多いのに売れていない
                 </p>
             </a>
+            #}
 
             <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=opportunity" class="card animate-in delay-3" style="text-decoration: none;">
                 <div style="font-size: 2rem; margin-bottom: 0.75rem;">💡</div>
@@ -398,5 +419,243 @@
         align-items: center;
     }
 }
+
+/* ブランドタブ */
+.brand-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.brand-tab {
+    padding: 0.6rem 1.2rem;
+    border: 2px solid var(--border-color);
+    border-radius: 25px;
+    background: var(--bg-card);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.brand-tab:hover {
+    border-color: var(--accent-pink);
+    background: var(--bg-secondary);
+}
+
+.brand-tab.active {
+    background: var(--gradient-warm);
+    border-color: transparent;
+    color: white;
+}
+
+.brand-pv-content {
+    display: none;
+}
+
+.brand-pv-content.active {
+    display: block;
+}
+
+/* PVカードグリッド */
+.pv-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+}
+
+@media (max-width: 1200px) {
+    .pv-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .pv-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.pv-card {
+    display: flex;
+    gap: 1.25rem;
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 1.25rem;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+    position: relative;
+}
+
+.pv-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+    border-color: var(--accent-pink);
+}
+
+.pv-card-rank {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--border-color);
+}
+
+.pv-card-rank.top-rank {
+    background: var(--gradient-warm);
+    color: white;
+    border-color: transparent;
+}
+
+.pv-card-link {
+    flex-shrink: 0;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-radius: 12px;
+}
+
+.pv-card-link:hover {
+    transform: scale(1.03);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.pv-card-image {
+    width: 200px;
+    height: 200px;
+    object-fit: cover;
+    border-radius: 12px;
+    display: block;
+}
+
+.pv-card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.pv-card-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.pv-card-variant {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+
+.pv-card-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.pv-card-metrics .metric.revenue-metric {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.metric {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.metric-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.metric-value.has-purchase {
+    color: var(--accent-mint);
+    font-weight: 700;
+}
+
+.metric-value.high-cvr {
+    color: var(--accent-mint);
+    font-weight: 700;
+}
+
+.metric-value.pv-value {
+    color: var(--accent-coral);
+}
+
+.revenue-metric {
+    align-items: center !important;
+}
+
+.metric-value.low-stock {
+    color: var(--accent-coral);
+}
+
+.metric-value.pv-value {
+    color: var(--accent-rose);
+}
+
+.metric-label {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    opacity: 0.8;
+}
 </style>
+
+<script>
+function switchBrandTab(brand) {
+    // タブのアクティブ状態を切り替え
+    document.querySelectorAll('.brand-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.brand === brand) {
+            tab.classList.add('active');
+        }
+    });
+    
+    // コンテンツの表示を切り替え
+    document.querySelectorAll('.brand-pv-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById('pv-' + brand).classList.add('active');
+}
+
+// 初期表示時に最初のタブをアクティブに
+document.addEventListener('DOMContentLoaded', function() {
+    const firstTab = document.querySelector('.brand-tab');
+    if (firstTab) {
+        switchBrandTab(firstTab.dataset.brand);
+    }
+});
+</script>
 {% endblock %}

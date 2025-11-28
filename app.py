@@ -13,16 +13,30 @@ from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from functools import wraps
 import pandas as pd
 from werkzeug.utils import secure_filename
 
+# シンプル認証
+SITE_PASSWORD = os.environ.get('SITE_PASSWORD', '898989')
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # R2ストレージ連携
 try:
-    from storage import download_product_master, upload_product_master, get_product_master_info, is_r2_enabled
+    from storage import download_product_master, upload_product_master, get_product_master_info, is_r2_enabled, save_ga4_data, get_latest_ga4_data
 except ImportError:
     is_r2_enabled = lambda: False
     download_product_master = None
+    save_ga4_data = None
+    get_latest_ga4_data = None
     upload_product_master = None
     get_product_master_info = None
 
@@ -56,7 +70,7 @@ data_store = {
 }
 
 # 登録済みブランド一覧
-BRANDS = ['rady', 'cherimi', 'michellmacaron', 'radycharm']
+BRANDS = ['rady', 'cherimi', 'michellmacaron', 'solni']
 
 
 def process_product_master_df(df):
@@ -275,6 +289,28 @@ def merge_and_analyze():
     # SKU IDで結合
     merged = pm.merge(ga, on='sku_id', how='left')
     
+    # 商品ページURLを自動生成（空の場合）
+    def generate_product_url(row):
+        if pd.notna(row.get('product_url')) and str(row.get('product_url')).strip():
+            return row['product_url']
+        
+        brand_raw = str(row.get('brand', '')).lower().replace(' ', '').replace('_', '')
+        brand_slug = ''
+        if 'rady' in brand_raw:
+            brand_slug = 'rady'
+        elif 'cherimi' in brand_raw:
+            brand_slug = 'cherimi'
+        elif 'michell' in brand_raw or 'macaron' in brand_raw:
+            brand_slug = 'michellmacaron'
+        elif 'solni' in brand_raw:
+            brand_slug = 'solni'
+        
+        if brand_slug and row.get('sku_id'):
+            return f"https://mycolor.jp/{brand_slug}/item/{row['sku_id']}"
+        return ''
+    
+    merged['product_url'] = merged.apply(generate_product_url, axis=1)
+    
     # 欠損値を0埋め
     for col in ['views', 'add_to_cart', 'purchases', 'revenue']:
         if col in merged.columns:
@@ -306,6 +342,9 @@ def merge_and_analyze():
     views_threshold = merged['views'].quantile(0.7)
     merged['is_opportunity'] = (merged['views'] >= views_threshold) & (merged['total_stock'] <= 5) & (merged['purchases'] < merged['views'] * 0.05)
     
+    # Regalectを除外
+    merged = merged[merged['brand'] != 'Regalect']
+    
     data_store['merged_data'] = merged
     return merged
 
@@ -315,6 +354,9 @@ def get_brand_summary():
     df = data_store['merged_data']
     if df is None:
         return None
+    
+    # Regalectを除外
+    df = df[df['brand'] != 'Regalect']
     
     summary = df.groupby('brand').agg({
         'sku_id': 'count',
@@ -381,8 +423,8 @@ def get_top_performers(brand=None, limit=20):
     return filtered.to_dict('records')
 
 
-def get_pv_ranking(brand=None, limit=50, grouped=True):
-    """PV（閲覧数）ランキングを取得"""
+def get_pv_ranking(brand=None, limit=50):
+    """PV（閲覧数）ランキングを取得（商品名でグループ化）"""
     df = data_store['merged_data']
     if df is None:
         return []
@@ -394,11 +436,45 @@ def get_pv_ranking(brand=None, limit=50, grouped=True):
     # 閲覧数が0より大きいものだけ
     filtered = filtered[filtered['views'] > 0]
     
-    if grouped and 'product_class_id' in filtered.columns:
-        return get_grouped_products(filtered, 'views', limit)
+    # 商品名（product_class_id）でグループ化して集計
+    if 'product_class_id' in filtered.columns:
+        grouped = filtered.groupby('product_class_id').agg({
+            'brand': 'first',
+            'product_name': 'first',
+            'image_url': 'first',
+            'product_url': 'first',
+            'views': 'first',  # GA4のPVは商品名レベルで同じ値なので first で取得
+            'add_to_cart': 'sum',
+            'purchases': 'sum',
+            'revenue': 'sum',
+            'total_stock': 'sum',
+        }).reset_index()
+        
+        # 購入率（PVに対する購入率）
+        grouped['purchase_rate'] = grouped.apply(
+            lambda x: (x['purchases'] / x['views'] * 100) if x['views'] > 0 else 0, axis=1
+        )
+        
+        grouped = grouped.sort_values('views', ascending=False).head(limit)
+        return grouped.to_dict('records')
     
     filtered = filtered.sort_values('views', ascending=False).head(limit)
     return filtered.to_dict('records')
+
+
+def get_pv_ranking_by_brand(limit_per_brand=30):
+    """ブランド別PVランキングを取得"""
+    df = data_store['merged_data']
+    if df is None:
+        return {}
+    
+    brands = df['brand'].dropna().unique().tolist()
+    result = {}
+    
+    for brand in brands:
+        result[brand] = get_pv_ranking(brand=brand, limit=limit_per_brand)
+    
+    return result
 
 
 def get_grouped_products(df, sort_by='views', limit=50):
@@ -461,7 +537,28 @@ def get_top_performers_grouped(brand=None, limit=20):
     return filtered.to_dict('records')
 
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """ログイン画面"""
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        if password == SITE_PASSWORD:
+            session['logged_in'] = True
+            return redirect(url_for('index'))
+        else:
+            flash('パスワードが違います', 'error')
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    """ログアウト"""
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
+
+
 @app.route('/')
+@login_required
 def index():
     """メインダッシュボード"""
     has_data = data_store['merged_data'] is not None
@@ -473,18 +570,19 @@ def index():
     if has_data:
         brands = data_store['merged_data']['brand'].dropna().unique().tolist()
         summary = get_brand_summary()
-        pv_ranking = get_pv_ranking(limit=10)  # TOP10
+        pv_ranking_by_brand = get_pv_ranking_by_brand(limit_per_brand=30)
         analysis_period = get_analysis_period()
     
     return render_template('index.html', 
                          has_data=has_data, 
                          brands=brands,
                          summary=summary,
-                         pv_ranking=pv_ranking,
+                         pv_ranking_by_brand=pv_ranking_by_brand,
                          analysis_period=analysis_period)
 
 
 @app.route('/upload', methods=['GET', 'POST'])
+@login_required
 def upload():
     """CSVアップロード画面"""
     if request.method == 'POST':
@@ -560,6 +658,7 @@ def upload():
 
 
 @app.route('/sync-r2', methods=['POST'])
+@login_required
 def sync_r2():
     """R2から商品マスタを同期"""
     if not is_r2_enabled():
@@ -584,6 +683,7 @@ def sync_r2():
 
 
 @app.route('/fetch-ga4', methods=['POST'])
+@login_required
 def fetch_ga4():
     """GA4 APIからデータを取得"""
     if not is_ga4_configured():
@@ -599,12 +699,18 @@ def fetch_ga4():
             flash('GA4からデータを取得できませんでした', 'error')
             return redirect(url_for('upload'))
         
-        # 取得したデータをdata_storeに保存
+        # 取得したデータをdata_storeに保存 & R2にも保存
         for brand, result in results.items():
             data_store['ga_sales'][brand] = result
             period = result['period']
             period_str = f"（{period['start_date'].strftime('%m/%d')}〜{period['end_date'].strftime('%m/%d')}）"
             flash(f'{brand.upper()} GA4データを取得しました（{len(result["data"])}件）{period_str}', 'success')
+            
+            # R2に保存
+            if save_ga4_data and is_r2_enabled():
+                start_str = period['start_date'].strftime('%Y%m%d')
+                end_str = period['end_date'].strftime('%Y%m%d')
+                save_ga4_data(brand, result['data'], start_str, end_str)
         
         # 商品マスタがあれば分析実行
         if data_store['product_master'] is not None:
@@ -619,6 +725,7 @@ def fetch_ga4():
 
 
 @app.route('/brand/<brand_name>')
+@login_required
 def brand_detail(brand_name):
     """ブランド別詳細"""
     if data_store['merged_data'] is None:
@@ -697,6 +804,31 @@ def init_from_r2():
             data_store['product_master'] = process_product_master_df(df)
             data_store['product_master_info'] = get_product_master_info()
             print(f"✅ Loaded {len(data_store['product_master'])} products from R2")
+            
+            # GA4データも読み込み
+            if get_latest_ga4_data:
+                print("☁️ Loading GA4 data from R2...")
+                for brand in BRANDS:
+                    ga4_data = get_latest_ga4_data(brand)
+                    if ga4_data:
+                        from datetime import datetime
+                        start_date = datetime.strptime(ga4_data['start_date'], '%Y%m%d') if ga4_data['start_date'] else None
+                        end_date = datetime.strptime(ga4_data['end_date'], '%Y%m%d') if ga4_data['end_date'] else None
+                        data_store['ga_sales'][brand] = {
+                            'data': ga4_data['df'],
+                            'period': {
+                                'start_date': start_date,
+                                'end_date': end_date,
+                                'period_type': 'daily' if start_date == end_date else 'custom'
+                            }
+                        }
+                        print(f"  ✅ {brand}: {len(ga4_data['df'])} rows")
+                
+                # 商品マスタとGA4データがあれば分析実行
+                if any(data_store['ga_sales'].values()):
+                    merge_and_analyze()
+                    print("✅ Auto-merged data on startup")
+            
             return True
         else:
             print("⚠️ No product master found in R2")
@@ -713,4 +845,4 @@ with app.app_context():
 
 if __name__ == '__main__':
     # 開発時はdebug=Trueだが、環境変数が消える問題があるのでuse_reloader=Falseに
-    app.run(debug=True, port=5050, use_reloader=False)
+    app.run(debug=True, port=8080, host='0.0.0.0', use_reloader=False)

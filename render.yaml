@@ -7,6 +7,10 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.6
+      - key: SECRET_KEY
+        generateValue: true
+      - key: APP_PASSWORD
+        sync: false
       - key: R2_ENDPOINT_URL
         sync: false
       - key: R2_ACCESS_KEY_ID
@@ -17,4 +21,13 @@ services:
         sync: false
       - key: R2_PRODUCT_MASTER_KEY
         value: product_master.csv
-
+      - key: GA4_CREDENTIALS_JSON
+        sync: false
+      - key: GA4_PROPERTY_RADY
+        sync: false
+      - key: GA4_PROPERTY_CHERIMI
+        sync: false
+      - key: GA4_PROPERTY_MICHELLMACARON
+        sync: false
+      - key: GA4_PROPERTY_SOLNI
+        sync: false

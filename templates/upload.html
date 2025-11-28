@@ -1,420 +1,132 @@
 {% extends "base.html" %}
 
-{% block title %}データアップロード - 商品分析{% endblock %}
+{% block title %}データ更新 - 商品分析{% endblock %}
 
 {% block content %}
 <section class="section">
     <div class="section-header">
         <h2 class="section-title">
-            <span class="icon">📤</span>
-            データアップロード
+            <span class="icon">🔄</span>
+            データ更新
         </h2>
     </div>
 
-    <!-- 商品マスタ（全ブランド共通） -->
-    <div class="card animate-in" style="margin-bottom: 2rem;">
-        <div class="card-header">
-            <h3 class="card-title">📦 商品マスタ（全ブランド共通）</h3>
-            {% if has_product %}
-                <span class="badge badge-success">✓ 読込済</span>
-            {% endif %}
+    <!-- メインアクション: GA4データ取得 -->
+    {% if ga4_api_enabled %}
+    <div class="card animate-in" style="margin-bottom: 2rem; border: 3px solid var(--accent-mint); background: linear-gradient(135deg, rgba(157, 196, 176, 0.15) 0%, rgba(157, 196, 176, 0.05) 100%);">
+        <div style="text-align: center; padding: 1.5rem 1rem;">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">📊</div>
+            <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem; color: var(--text-primary);">売上データを更新</h3>
+            <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 1.5rem;">
+                ボタンを押すだけで最新の売上データを取得します
+            </p>
+            
+            <div class="ga4-fetch-buttons" style="justify-content: center; flex-direction: column; align-items: center; gap: 1rem;">
+                <form method="POST" action="{{ url_for('fetch_ga4') }}">
+                    <input type="hidden" name="period_type" value="weekly">
+                    <button type="submit" class="btn btn-primary" style="padding: 1.2rem 3rem; font-size: 1.2rem;">
+                        📆 過去7日間のデータを取得
+                    </button>
+                </form>
+                <p style="color: var(--accent-mint); font-size: 0.85rem; margin: 0;">
+                    ↑ こちらがおすすめ！正確なデータが取れます
+                </p>
+            </div>
+            
+            <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+                    午後以降なら前日データも参考になります
+                </p>
+                <form method="POST" action="{{ url_for('fetch_ga4') }}">
+                    <input type="hidden" name="period_type" value="yesterday">
+                    <button type="submit" class="btn btn-secondary" style="padding: 0.75rem 1.5rem; font-size: 0.9rem;">
+                        📅 昨日のデータを取得
+                    </button>
+                </form>
+            </div>
         </div>
+    </div>
+    {% endif %}
+
+    <!-- 商品マスタ更新（折りたたみ可能） -->
+    <details class="card animate-in delay-1" style="margin-bottom: 1rem;">
+        <summary style="cursor: pointer; padding: 1rem; display: flex; align-items: center; gap: 0.75rem; font-weight: 600; font-size: 1rem;">
+            <span style="font-size: 1.25rem;">📦</span>
+            商品マスタを更新する
+            {% if has_product %}
+            <span class="badge badge-success" style="margin-left: auto;">✓ 読込済</span>
+            {% endif %}
+        </summary>
         
-        <!-- R2ストレージからの読み込み -->
-        <div class="data-source-section">
-            <div class="data-source-option r2-option {% if r2_enabled and r2_product_info and r2_product_info.exists %}available{% endif %}">
-                <div class="option-header">
-                    <span class="option-icon">☁️</span>
-                    <span class="option-title">前回のデータを使用（R2ストレージ）</span>
-                    {% if r2_enabled and r2_product_info and r2_product_info.exists %}
-                        <span class="badge badge-success">利用可能</span>
-                    {% elif r2_enabled %}
-                        <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted);">データなし</span>
-                    {% else %}
-                        <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted);">未設定</span>
-                    {% endif %}
-                </div>
-                
-                {% if r2_enabled and r2_product_info and r2_product_info.exists %}
-                <div class="option-content">
-                    <div class="r2-file-info">
-                        <div class="file-detail">
-                            <span class="detail-label">ファイル名</span>
-                            <span class="detail-value">{{ r2_product_info.key or 'product_master.csv' }}</span>
-                        </div>
-                        <div class="file-detail">
-                            <span class="detail-label">最終更新</span>
-                            <span class="detail-value">{{ r2_product_info.last_modified.strftime('%Y/%m/%d %H:%M') }}</span>
-                        </div>
-                        <div class="file-detail">
-                            <span class="detail-label">サイズ</span>
-                            <span class="detail-value">{{ "%.1f"|format(r2_product_info.size / 1024 / 1024) }} MB</span>
-                        </div>
+        <div style="padding: 0 1rem 1.5rem 1rem; border-top: 1px solid var(--border-color); margin-top: 0.5rem; padding-top: 1rem;">
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+                商品の在庫情報を更新する場合にCSVをアップロードしてください
+            </p>
+            
+            {% if r2_enabled and r2_product_info and r2_product_info.exists %}
+            <div style="background: var(--bg-secondary); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <div>
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">現在のデータ：</span>
+                        <span style="font-weight: 600;">{{ r2_product_info.last_modified.strftime('%Y/%m/%d %H:%M') }}</span>
                     </div>
-                    <form method="POST" action="{{ url_for('sync_r2') }}">
-                        <button type="submit" class="btn btn-primary" style="width: 100%;">
-                            🔄 R2から最新データを読み込む
+                    <form method="POST" action="{{ url_for('sync_r2') }}" style="margin: 0;">
+                        <button type="submit" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
+                            🔄 再読み込み
                         </button>
                     </form>
                 </div>
-                {% elif r2_enabled %}
-                <div class="option-content">
-                    <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
-                        R2ストレージにデータがありません。<br>
-                        下の「新しいCSVをアップロード」から追加してください。
-                    </p>
-                </div>
-                {% else %}
-                <div class="option-content">
-                    <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
-                        R2ストレージが設定されていません。<br>
-                        環境変数を設定すると利用できます。
-                    </p>
-                </div>
-                {% endif %}
             </div>
+            {% endif %}
             
-            <div class="option-divider">
-                <span>または</span>
-            </div>
-            
-            <!-- 新しいCSVをアップロード -->
-            <div class="data-source-option upload-option">
-                <div class="option-header">
-                    <span class="option-icon">📁</span>
-                    <span class="option-title">新しいCSVをアップロード</span>
+            <form method="POST" enctype="multipart/form-data" action="{{ url_for('upload') }}">
+                <div class="file-upload" onclick="document.getElementById('product_csv').click()">
+                    <input type="file" name="product_csv" id="product_csv" accept=".csv" style="display: none;" onchange="this.form.submit()">
+                    <div class="file-upload-icon">📄</div>
+                    <p class="file-upload-text">クリックしてCSVを選択</p>
+                    <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.5rem;">選択するとすぐにアップロードされます</p>
                 </div>
-                <div class="option-content">
-                    <form method="POST" enctype="multipart/form-data" id="product-upload-form">
-                        <div class="file-upload" onclick="document.getElementById('product_csv').click()">
-                            <input type="file" name="product_csv" id="product_csv" accept=".csv" style="display: none;" onchange="updateFileName(this, 'product_filename')">
-                            <div class="file-upload-icon">📄</div>
-                            <p id="product_filename" class="file-upload-text">クリックしてCSVを選択</p>
-                        </div>
-                        {% if r2_enabled %}
-                        <p style="color: var(--accent-mint); font-size: 0.8rem; margin-top: 0.5rem; text-align: center;">
-                            ※アップロードするとR2にも自動保存されます
-                        </p>
-                        {% endif %}
-                    </form>
-                </div>
-            </div>
+            </form>
         </div>
-    </div>
+    </details>
 
-    <form method="POST" enctype="multipart/form-data">
-        <!-- GA4 API 自動取得 -->
-        {% if ga4_api_enabled %}
-        <div class="card animate-in delay-1" style="margin-bottom: 2rem; border: 2px solid var(--accent-mint);">
-            <div class="card-header">
-                <h3 class="card-title">🔗 GA4 API 自動取得</h3>
-                <span class="badge badge-success">API連携中</span>
-            </div>
-            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                ワンクリックでGA4から最新データを取得できます
-            </p>
-            
-            <div class="ga4-fetch-buttons">
-                <form method="POST" action="{{ url_for('fetch_ga4') }}" style="display: inline;">
-                    <input type="hidden" name="period_type" value="yesterday">
-                    <button type="submit" class="btn btn-primary">
-                        📅 前日データを取得
-                    </button>
-                </form>
-                <form method="POST" action="{{ url_for('fetch_ga4') }}" style="display: inline;">
-                    <input type="hidden" name="period_type" value="weekly">
-                    <button type="submit" class="btn btn-secondary">
-                        📆 週次データを取得（7日間）
-                    </button>
-                </form>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- ブランド別GA売上 -->
-        <div class="card animate-in delay-1">
-            <div class="card-header">
-                <h3 class="card-title">📊 GA4売上CSV（ブランド別）</h3>
-                {% if ga4_api_enabled %}
-                <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted);">手動アップロード</span>
-                {% endif %}
-            </div>
-            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
-                {% if ga4_api_enabled %}
-                API取得できない場合は、CSVを手動でアップロードできます
-                {% else %}
-                各ブランドのGA4プロパティからエクスポートしたEコマース購入データ
-                {% endif %}
-            </p>
-
-            <div class="brand-upload-grid">
-                {% for brand in brands %}
-                <div class="brand-upload-item {% if ga_status[brand].loaded %}loaded{% endif %}">
-                    <div class="brand-header">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <span class="brand-icon">
-                                {% if brand == 'rady' %}👗
-                                {% elif brand == 'cherimi' %}🌸
-                                {% elif brand == 'michellmacaron' %}🎀
-                                {% elif brand == 'radycharm' %}✨
-                                {% else %}🏷️
-                                {% endif %}
-                            </span>
-                            <span style="font-weight: 600; text-transform: uppercase;">{{ brand }}</span>
-                        </div>
-                        {% if ga_status[brand].loaded %}
-                            <span class="badge badge-success" style="font-size: 0.7rem;">✓ 読込済</span>
-                        {% else %}
-                            <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted); font-size: 0.7rem;">未読込</span>
-                        {% endif %}
-                    </div>
-                    
-                    <!-- 期間情報表示 -->
-                    {% if ga_status[brand].loaded and ga_status[brand].period %}
-                        {% set period = ga_status[brand].period %}
-                        <div class="period-info">
-                            {% if period.start_date and period.end_date %}
-                                <div class="period-badge {% if period.period_type == 'daily' %}daily{% elif period.period_type == 'weekly' %}weekly{% else %}custom{% endif %}">
-                                    {% if period.period_type == 'daily' %}
-                                        📅 日次
-                                    {% elif period.period_type == 'weekly' %}
-                                        📆 週次
-                                    {% elif period.period_type == 'monthly' %}
-                                        🗓️ 月次
-                                    {% else %}
-                                        📊 {{ period.days }}日間
-                                    {% endif %}
-                                </div>
-                                <div class="period-dates">
-                                    {{ period.start_date.strftime('%Y/%m/%d') }}
-                                    {% if period.start_date != period.end_date %}
-                                        〜 {{ period.end_date.strftime('%m/%d') }}
-                                    {% endif %}
-                                </div>
-                            {% endif %}
-                            <div class="period-count">{{ ga_status[brand].count }}件</div>
-                        </div>
-                    {% endif %}
-                    
-                    <div class="file-upload-small" onclick="document.getElementById('ga_csv_{{ brand }}').click()">
-                        <input type="file" name="ga_csv_{{ brand }}" id="ga_csv_{{ brand }}" accept=".csv" style="display: none;" onchange="updateFileName(this, 'ga_filename_{{ brand }}')">
-                        <p id="ga_filename_{{ brand }}" class="file-upload-text-small">
-                            {% if ga_status[brand].loaded %}新しいCSVで更新{% else %}CSVを選択{% endif %}
-                        </p>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-
-        <div style="text-align: center; margin-top: 2rem;">
-            <button type="submit" class="btn btn-primary" style="padding: 1rem 3rem; font-size: 1.1rem;">
-                🚀 アップロード＆分析開始
-            </button>
-        </div>
-    </form>
-</section>
-
-<section class="section">
-    <div class="card">
-        <h3 class="card-title" style="margin-bottom: 1rem;">💡 使い方</h3>
-        <ol style="color: var(--text-secondary); line-height: 2.2;">
-            <li><strong>商品マスタ</strong>：R2から前回データを読み込むか、新しいCSVをアップロード</li>
-            <li>各ブランドのGA4プロパティから<strong>Eコマース購入レポート</strong>をCSVエクスポート</li>
-            <li>対応するブランド欄にCSVをアップロード</li>
-            <li>「アップロード＆分析開始」をクリック</li>
-        </ol>
-    </div>
 </section>
 
 <style>
-/* データソース選択セクション */
-.data-source-section {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+details > summary {
+    list-style: none;
 }
-
-.data-source-option {
-    border: 2px solid var(--border-color);
-    border-radius: 16px;
-    padding: 1.25rem;
-    transition: all 0.3s ease;
+details > summary::-webkit-details-marker {
+    display: none;
 }
-
-.data-source-option.r2-option.available {
-    border-color: var(--accent-mint);
-    background: linear-gradient(135deg, rgba(157, 196, 176, 0.1) 0%, rgba(157, 196, 176, 0.05) 100%);
-}
-
-.data-source-option:hover {
-    border-color: var(--accent-pink);
-}
-
-.option-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-}
-
-.option-icon {
-    font-size: 1.5rem;
-}
-
-.option-title {
-    font-weight: 600;
-    font-size: 1rem;
-    flex: 1;
-}
-
-.option-content {
-    padding-top: 0.5rem;
-}
-
-.option-divider {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-}
-
-.option-divider::before,
-.option-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--border-color);
-}
-
-/* R2ファイル情報 */
-.r2-file-info {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-bottom: 1rem;
-    padding: 1rem;
-    background: var(--bg-secondary);
-    border-radius: 12px;
-}
-
-.file-detail {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.detail-label {
+details > summary::before {
+    content: '▶';
     font-size: 0.7rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    margin-right: 0.5rem;
+    transition: transform 0.2s;
+}
+details[open] > summary::before {
+    transform: rotate(90deg);
 }
 
-.detail-value {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-/* ブランドアップロードグリッド */
-.brand-upload-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+.ga4-fetch-buttons {
+    display: flex;
     gap: 1rem;
-}
-
-.brand-upload-item {
-    background: var(--bg-secondary);
-    border-radius: 16px;
-    padding: 1.25rem;
-    border: 2px solid var(--border-color);
-    transition: all 0.3s ease;
-}
-
-.brand-upload-item:hover {
-    border-color: var(--accent-pink);
-    transform: translateY(-2px);
-}
-
-.brand-upload-item.loaded {
-    border-color: var(--accent-mint);
-    background: linear-gradient(135deg, rgba(157, 196, 176, 0.1) 0%, rgba(157, 196, 176, 0.05) 100%);
-}
-
-.brand-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.75rem;
-}
-
-.brand-icon {
-    font-size: 1.25rem;
-}
-
-.period-info {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-    padding: 0.6rem 0.85rem;
-    background: var(--bg-card);
-    border-radius: 10px;
     flex-wrap: wrap;
 }
 
-.period-badge {
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.25rem 0.6rem;
-    border-radius: 6px;
-}
-
-.period-badge.daily {
-    background: rgba(201, 184, 217, 0.3);
-    color: #8B6FA8;
-}
-
-.period-badge.weekly {
-    background: rgba(157, 196, 176, 0.3);
-    color: #5A8A6F;
-}
-
-.period-badge.custom {
-    background: rgba(229, 193, 133, 0.3);
-    color: #B8944A;
-}
-
-.period-dates {
-    font-size: 0.85rem;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 500;
-    color: var(--text-primary);
-}
-
-.period-count {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-left: auto;
-}
-
-/* ファイルアップロード */
 .file-upload {
-    border: 2px dashed var(--accent-peach);
+    border: 2px dashed var(--border-color);
     border-radius: 16px;
     padding: 2rem;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s;
-    background: linear-gradient(135deg, rgba(255, 205, 178, 0.1) 0%, rgba(232, 164, 164, 0.05) 100%);
 }
 
 .file-upload:hover {
     border-color: var(--accent-pink);
-    background: linear-gradient(135deg, rgba(232, 164, 164, 0.15) 0%, rgba(255, 205, 178, 0.1) 100%);
-    transform: translateY(-2px);
+    background: rgba(232, 164, 164, 0.08);
 }
 
 .file-upload-icon {
@@ -427,76 +139,5 @@
     margin: 0;
     font-weight: 500;
 }
-
-.file-upload-small {
-    border: 2px dashed var(--border-color);
-    border-radius: 10px;
-    padding: 0.85rem;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.file-upload-small:hover {
-    border-color: var(--accent-pink);
-    background: rgba(232, 164, 164, 0.08);
-}
-
-.file-upload-text-small {
-    color: var(--text-muted);
-    margin: 0;
-    font-size: 0.85rem;
-}
-
-/* GA4 API ボタン */
-.ga4-fetch-buttons {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.ga4-fetch-buttons .btn {
-    flex: 1;
-    min-width: 200px;
-    justify-content: center;
-}
-
-@media (max-width: 768px) {
-    .r2-file-info {
-        grid-template-columns: 1fr;
-    }
-}
 </style>
-
-<script>
-function updateFileName(input, targetId) {
-    const target = document.getElementById(targetId);
-    if (input.files.length > 0) {
-        target.textContent = input.files[0].name;
-        target.style.color = 'var(--accent-rose)';
-        target.style.fontWeight = '600';
-        input.parentElement.style.borderColor = 'var(--accent-pink)';
-        input.parentElement.style.background = 'linear-gradient(135deg, rgba(232, 164, 164, 0.15) 0%, rgba(255, 205, 178, 0.1) 100%)';
-    }
-}
-
-// ドラッグ&ドロップ対応
-document.querySelectorAll('.file-upload, .file-upload-small').forEach(el => {
-    el.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        el.style.borderColor = 'var(--accent-pink)';
-        el.style.background = 'linear-gradient(135deg, rgba(232, 164, 164, 0.2) 0%, rgba(255, 205, 178, 0.15) 100%)';
-    });
-    el.addEventListener('dragleave', () => {
-        el.style.borderColor = '';
-        el.style.background = '';
-    });
-    el.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const input = el.querySelector('input[type="file"]');
-        input.files = e.dataTransfer.files;
-        input.dispatchEvent(new Event('change'));
-    });
-});
-</script>
 {% endblock %}
