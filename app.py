@@ -14,10 +14,12 @@ from werkzeug.utils import secure_filename
 
 # R2ストレージ連携
 try:
-    from storage import download_product_master, upload_product_master, get_product_master_info
-    R2_ENABLED = True
+    from storage import download_product_master, upload_product_master, get_product_master_info, is_r2_enabled
 except ImportError:
-    R2_ENABLED = False
+    is_r2_enabled = lambda: False
+    download_product_master = None
+    upload_product_master = None
+    get_product_master_info = None
 
 # GA4 API連携
 try:
@@ -488,7 +490,7 @@ def upload():
                 try:
                     data_store['product_master'] = load_product_master(filepath)
                     # R2にもアップロード（設定されている場合）
-                    if R2_ENABLED:
+                    if is_r2_enabled():
                         upload_product_master(filepath)
                         flash(f'商品マスタを読み込み＆R2に保存しました（{len(data_store["product_master"])}件）', 'success')
                     else:
@@ -537,14 +539,14 @@ def upload():
     
     # R2の商品マスタ情報
     r2_product_info = None
-    if R2_ENABLED:
+    if is_r2_enabled():
         r2_product_info = get_product_master_info()
     
     return render_template('upload.html',
                          has_product=data_store['product_master'] is not None,
                          ga_status=ga_status,
                          brands=BRANDS,
-                         r2_enabled=R2_ENABLED,
+                         r2_enabled=is_r2_enabled(),
                          r2_product_info=r2_product_info,
                          ga4_api_enabled=GA4_API_ENABLED)
 
@@ -552,7 +554,7 @@ def upload():
 @app.route('/sync-r2', methods=['POST'])
 def sync_r2():
     """R2から商品マスタを同期"""
-    if not R2_ENABLED:
+    if not is_r2_enabled():
         flash('R2ストレージが設定されていません', 'error')
         return redirect(url_for('upload'))
     
@@ -676,7 +678,7 @@ def api_products():
 
 def init_from_r2():
     """起動時にR2から最新の商品マスタを読み込む"""
-    if not R2_ENABLED:
+    if not is_r2_enabled():
         print("⚠️ R2 is not enabled. Set R2 environment variables to enable.")
         return False
     
