@@ -8,6 +8,11 @@
 import os
 import re
 from datetime import datetime
+
+# .envファイルから環境変数を読み込み（ローカル開発用）
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 import pandas as pd
 from werkzeug.utils import secure_filename
