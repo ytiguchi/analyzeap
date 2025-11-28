@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}商品分析ダッシュボード{% endblock %}</title>
+    
+    <!-- PWA対応 -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#E8A4A4">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="商品分析">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <meta name="description" content="商品在庫 × GA4売上分析アプリ">
+    
     <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -573,5 +583,20 @@
     </main>
 
     {% block extra_js %}{% endblock %}
+    
+    <!-- Service Worker登録 -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then(registration => {
+                        console.log('SW registered:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('SW registration failed:', error);
+                    });
+            });
+        }
+    </script>
 </body>
 </html>
