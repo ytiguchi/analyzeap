@@ -35,15 +35,19 @@ def get_r2_client():
 
 
 def download_product_master():
-    """R2から商品マスタCSVをダウンロード"""
+    """R2から商品マスタCSVをダウンロード（最新のCSVを自動検出）"""
     client = get_r2_client()
     if client is None:
         print("R2 credentials not configured, skipping download")
         return None
     
+    # 最新のCSVファイルを探す
+    latest = find_latest_csv()
+    file_key = latest['key'] if latest else R2_PRODUCT_MASTER_KEY
+    
     try:
-        print(f"Downloading from R2: {R2_BUCKET_NAME}/{R2_PRODUCT_MASTER_KEY}")
-        response = client.get_object(Bucket=R2_BUCKET_NAME, Key=R2_PRODUCT_MASTER_KEY)
+        print(f"📥 Downloading from R2: {R2_BUCKET_NAME}/{file_key}")
+        response = client.get_object(Bucket=R2_BUCKET_NAME, Key=file_key)
         content = response['Body'].read()
         
         # エンコーディング検出して読み込み
@@ -58,9 +62,6 @@ def download_product_master():
                 continue
         
         print("❌ All encodings failed")
-        return None
-    except client.exceptions.NoSuchKey:
-        print(f"❌ Product master not found in R2: {R2_PRODUCT_MASTER_KEY}")
         return None
     except Exception as e:
         print(f"❌ Error downloading from R2: {e}")
@@ -110,17 +111,60 @@ def list_r2_files():
         return []
 
 
+def find_latest_csv():
+    """R2バケット内の最新のCSVファイルを見つける"""
+    client = get_r2_client()
+    if client is None:
+        return None
+    
+    try:
+        response = client.list_objects_v2(Bucket=R2_BUCKET_NAME)
+        csv_files = []
+        for obj in response.get('Contents', []):
+            key = obj['Key']
+            if key.endswith('.csv'):
+                csv_files.append({
+                    'key': key,
+                    'last_modified': obj['LastModified'],
+                    'size': obj['Size']
+                })
+        
+        if not csv_files:
+            print("❌ No CSV files found in R2")
+            return None
+        
+        # 最新のファイルを取得
+        latest = max(csv_files, key=lambda x: x['last_modified'])
+        print(f"✅ Found latest CSV: {latest['key']} (modified: {latest['last_modified']})")
+        return latest
+    except Exception as e:
+        print(f"❌ Error finding latest CSV: {e}")
+        return None
+
+
 def get_product_master_info():
-    """商品マスタの情報を取得"""
+    """商品マスタの情報を取得（最新のCSVを自動検出）"""
     client = get_r2_client()
     if client is None:
         print("❌ get_product_master_info: R2 client is None")
         return {'exists': False}
     
+    # 最新のCSVを探す
+    latest = find_latest_csv()
+    if latest:
+        return {
+            'key': latest['key'],
+            'size': latest['size'],
+            'last_modified': latest['last_modified'],
+            'exists': True
+        }
+    
+    # フォールバック: 固定ファイル名で探す
     try:
         print(f"📂 Checking R2: {R2_BUCKET_NAME}/{R2_PRODUCT_MASTER_KEY}")
         response = client.head_object(Bucket=R2_BUCKET_NAME, Key=R2_PRODUCT_MASTER_KEY)
         info = {
+            'key': R2_PRODUCT_MASTER_KEY,
             'size': response['ContentLength'],
             'last_modified': response['LastModified'],
             'exists': True
