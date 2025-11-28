@@ -704,4 +704,5 @@ with app.app_context():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5050)
+    # 開発時はdebug=Trueだが、環境変数が消える問題があるのでuse_reloader=Falseに
+    app.run(debug=True, port=5050, use_reloader=False)

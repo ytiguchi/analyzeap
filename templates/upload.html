@@ -11,50 +11,98 @@
         </h2>
     </div>
 
-    <form method="POST" enctype="multipart/form-data">
-        <!-- 商品マスタ（全ブランド共通） -->
-        <div class="card animate-in" style="margin-bottom: 2rem;">
-            <div class="card-header">
-                <h3 class="card-title">📦 商品マスタCSV（全ブランド共通）</h3>
-                {% if has_product %}
-                    <span class="badge badge-success">✓ 読込済</span>
-                {% endif %}
-            </div>
-            
-            <!-- R2ストレージ情報 -->
-            {% if r2_enabled %}
-            <div class="r2-status" style="margin-bottom: 1rem;">
-                <div class="r2-badge">
-                    <span class="r2-icon">☁️</span>
-                    <span>Cloudflare R2 連携中</span>
-                </div>
-                {% if r2_product_info and r2_product_info.exists %}
-                    <div class="r2-info">
-                        <span>最終更新: {{ r2_product_info.last_modified.strftime('%Y/%m/%d %H:%M') }}</span>
-                        <form method="POST" action="{{ url_for('sync_r2') }}" style="display: inline;">
-                            <button type="submit" class="btn-sync">🔄 R2から同期</button>
-                        </form>
-                    </div>
-                {% else %}
-                    <div class="r2-info" style="color: var(--text-muted);">
-                        R2に商品マスタがありません
-                    </div>
-                {% endif %}
-            </div>
+    <!-- 商品マスタ（全ブランド共通） -->
+    <div class="card animate-in" style="margin-bottom: 2rem;">
+        <div class="card-header">
+            <h3 class="card-title">📦 商品マスタ（全ブランド共通）</h3>
+            {% if has_product %}
+                <span class="badge badge-success">✓ 読込済</span>
             {% endif %}
+        </div>
+        
+        <!-- R2ストレージからの読み込み -->
+        <div class="data-source-section">
+            <div class="data-source-option r2-option {% if r2_enabled and r2_product_info and r2_product_info.exists %}available{% endif %}">
+                <div class="option-header">
+                    <span class="option-icon">☁️</span>
+                    <span class="option-title">前回のデータを使用（R2ストレージ）</span>
+                    {% if r2_enabled and r2_product_info and r2_product_info.exists %}
+                        <span class="badge badge-success">利用可能</span>
+                    {% elif r2_enabled %}
+                        <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted);">データなし</span>
+                    {% else %}
+                        <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted);">未設定</span>
+                    {% endif %}
+                </div>
+                
+                {% if r2_enabled and r2_product_info and r2_product_info.exists %}
+                <div class="option-content">
+                    <div class="r2-file-info">
+                        <div class="file-detail">
+                            <span class="detail-label">ファイル名</span>
+                            <span class="detail-value">{{ r2_product_info.key or 'product_master.csv' }}</span>
+                        </div>
+                        <div class="file-detail">
+                            <span class="detail-label">最終更新</span>
+                            <span class="detail-value">{{ r2_product_info.last_modified.strftime('%Y/%m/%d %H:%M') }}</span>
+                        </div>
+                        <div class="file-detail">
+                            <span class="detail-label">サイズ</span>
+                            <span class="detail-value">{{ "%.1f"|format(r2_product_info.size / 1024 / 1024) }} MB</span>
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ url_for('sync_r2') }}">
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            🔄 R2から最新データを読み込む
+                        </button>
+                    </form>
+                </div>
+                {% elif r2_enabled %}
+                <div class="option-content">
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
+                        R2ストレージにデータがありません。<br>
+                        下の「新しいCSVをアップロード」から追加してください。
+                    </p>
+                </div>
+                {% else %}
+                <div class="option-content">
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
+                        R2ストレージが設定されていません。<br>
+                        環境変数を設定すると利用できます。
+                    </p>
+                </div>
+                {% endif %}
+            </div>
             
-            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                全ブランドの在庫・カラー・画像URLなどを含む商品データ
-                {% if r2_enabled %}<br><small style="color: var(--accent-mint);">※アップロードするとR2にも自動保存されます</small>{% endif %}
-            </p>
+            <div class="option-divider">
+                <span>または</span>
+            </div>
             
-            <div class="file-upload" onclick="document.getElementById('product_csv').click()">
-                <input type="file" name="product_csv" id="product_csv" accept=".csv" style="display: none;" onchange="updateFileName(this, 'product_filename')">
-                <div class="file-upload-icon">📁</div>
-                <p id="product_filename" class="file-upload-text">クリックしてCSVを選択</p>
+            <!-- 新しいCSVをアップロード -->
+            <div class="data-source-option upload-option">
+                <div class="option-header">
+                    <span class="option-icon">📁</span>
+                    <span class="option-title">新しいCSVをアップロード</span>
+                </div>
+                <div class="option-content">
+                    <form method="POST" enctype="multipart/form-data" id="product-upload-form">
+                        <div class="file-upload" onclick="document.getElementById('product_csv').click()">
+                            <input type="file" name="product_csv" id="product_csv" accept=".csv" style="display: none;" onchange="updateFileName(this, 'product_filename')">
+                            <div class="file-upload-icon">📄</div>
+                            <p id="product_filename" class="file-upload-text">クリックしてCSVを選択</p>
+                        </div>
+                        {% if r2_enabled %}
+                        <p style="color: var(--accent-mint); font-size: 0.8rem; margin-top: 0.5rem; text-align: center;">
+                            ※アップロードするとR2にも自動保存されます
+                        </p>
+                        {% endif %}
+                    </form>
+                </div>
             </div>
         </div>
+    </div>
 
+    <form method="POST" enctype="multipart/form-data">
         <!-- GA4 API 自動取得 -->
         {% if ga4_api_enabled %}
         <div class="card animate-in delay-1" style="margin-bottom: 2rem; border: 2px solid var(--accent-mint);">
@@ -171,23 +219,106 @@
     <div class="card">
         <h3 class="card-title" style="margin-bottom: 1rem;">💡 使い方</h3>
         <ol style="color: var(--text-secondary); line-height: 2.2;">
-            <li><strong>商品マスタCSV</strong>（全ブランド合計）をアップロード{% if r2_enabled %}（R2に自動保存）{% endif %}</li>
+            <li><strong>商品マスタ</strong>：R2から前回データを読み込むか、新しいCSVをアップロード</li>
             <li>各ブランドのGA4プロパティから<strong>Eコマース購入レポート</strong>をCSVエクスポート</li>
             <li>対応するブランド欄にCSVをアップロード</li>
             <li>「アップロード＆分析開始」をクリック</li>
         </ol>
-        {% if r2_enabled %}
-        <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 12px;">
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0;">
-                ☁️ <strong>R2ストレージ連携:</strong> 商品マスタはCloudflare R2に保存されます。<br>
-                スタッフが最新の商品マスタをR2にアップロードすれば、「R2から同期」で取得できます。
-            </p>
-        </div>
-        {% endif %}
     </div>
 </section>
 
 <style>
+/* データソース選択セクション */
+.data-source-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.data-source-option {
+    border: 2px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.25rem;
+    transition: all 0.3s ease;
+}
+
+.data-source-option.r2-option.available {
+    border-color: var(--accent-mint);
+    background: linear-gradient(135deg, rgba(157, 196, 176, 0.1) 0%, rgba(157, 196, 176, 0.05) 100%);
+}
+
+.data-source-option:hover {
+    border-color: var(--accent-pink);
+}
+
+.option-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.option-icon {
+    font-size: 1.5rem;
+}
+
+.option-title {
+    font-weight: 600;
+    font-size: 1rem;
+    flex: 1;
+}
+
+.option-content {
+    padding-top: 0.5rem;
+}
+
+.option-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.option-divider::before,
+.option-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+}
+
+/* R2ファイル情報 */
+.r2-file-info {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+}
+
+.file-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.detail-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.detail-value {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* ブランドアップロードグリッド */
 .brand-upload-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -317,58 +448,6 @@
     font-size: 0.85rem;
 }
 
-/* R2ストレージUI */
-.r2-status {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.85rem 1.1rem;
-    background: linear-gradient(135deg, rgba(201, 184, 217, 0.15) 0%, rgba(201, 184, 217, 0.08) 100%);
-    border: 1px solid var(--accent-lavender);
-    border-radius: 12px;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-}
-
-.r2-badge {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #8B6FA8;
-}
-
-.r2-icon {
-    font-size: 1.1rem;
-}
-
-.r2-info {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-}
-
-.btn-sync {
-    background: var(--gradient-dream);
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s;
-    font-family: inherit;
-}
-
-.btn-sync:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(201, 184, 217, 0.4);
-}
-
 /* GA4 API ボタン */
 .ga4-fetch-buttons {
     display: flex;
@@ -380,6 +459,12 @@
     flex: 1;
     min-width: 200px;
     justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .r2-file-info {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
 
