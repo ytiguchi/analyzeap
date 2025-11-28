@@ -450,10 +450,12 @@ def get_pv_ranking(brand=None, limit=50):
             'total_stock': 'sum',
         }).reset_index()
         
-        # 購入率（PVに対する購入率）
-        grouped['purchase_rate'] = grouped.apply(
+        # CVR（PVに対する購入率）
+        grouped['cvr'] = grouped.apply(
             lambda x: (x['purchases'] / x['views'] * 100) if x['views'] > 0 else 0, axis=1
         )
+        # 互換性のためにpurchase_rateも設定
+        grouped['purchase_rate'] = grouped['cvr']
         
         grouped = grouped.sort_values('views', ascending=False).head(limit)
         return grouped.to_dict('records')

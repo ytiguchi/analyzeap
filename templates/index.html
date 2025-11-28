@@ -87,7 +87,7 @@
                                 <span class="metric-label">PV</span>
                             </div>
                             <div class="metric">
-                                <span class="metric-value {% if (p.purchase_rate or 0) >= 1 %}high-cvr{% endif %}">{{ "%.2f"|format(p.purchase_rate or 0) }}%</span>
+                                <span class="metric-value {% if (p.cvr or 0) >= 1 %}high-cvr{% endif %}">{{ "%.2f"|format(p.cvr or 0) }}%</span>
                                 <span class="metric-label">CVR</span>
                             </div>
                             <div class="metric">
