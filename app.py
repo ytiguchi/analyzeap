@@ -465,12 +465,32 @@ def get_pv_ranking(brand=None, limit=50):
             product = row.to_dict()
             # このproduct_class_idに属するSKUを取得
             skus = filtered[filtered['product_class_id'] == row['product_class_id']].copy()
-            # 各SKUのCVRを計算（購入÷PV）
-            skus['cvr'] = skus.apply(
-                lambda x: (x['purchases'] / x['views'] * 100) if x['views'] > 0 else 0, axis=1
-            )
-            skus = skus.sort_values('views', ascending=False)
-            product['skus'] = skus[['color_name', 'color_tag', 'size', 'views', 'add_to_cart', 'purchases', 'cvr', 'total_stock']].to_dict('records')
+            
+            if len(skus) > 0:
+                # 各SKUのCVRを計算（購入÷PV）
+                skus['cvr'] = skus.apply(
+                    lambda x: (x['purchases'] / x['views'] * 100) if x['views'] > 0 else 0, axis=1
+                )
+                skus = skus.sort_values('views', ascending=False)
+                
+                # SKUデータを辞書リストに変換
+                sku_list = []
+                for _, sku_row in skus.iterrows():
+                    sku_data = {
+                        'color_name': sku_row.get('color_name', ''),
+                        'color_tag': sku_row.get('color_tag', '#888'),
+                        'size': sku_row.get('size', ''),
+                        'views': int(sku_row.get('views', 0)),
+                        'add_to_cart': int(sku_row.get('add_to_cart', 0)),
+                        'purchases': int(sku_row.get('purchases', 0)),
+                        'cvr': float(sku_row.get('cvr', 0)),
+                        'total_stock': int(sku_row.get('total_stock', 0)),
+                    }
+                    sku_list.append(sku_data)
+                product['skus'] = sku_list
+            else:
+                product['skus'] = []
+            
             result.append(product)
         
         return result
