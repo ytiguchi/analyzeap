@@ -365,6 +365,22 @@ def get_analysis_period():
     else:
         overall['total_days'] = 0
     
+    # 前期間（比較対象）の情報を追加
+    ga_prev_dict = data_store['ga_sales_previous']
+    if ga_prev_dict:
+        prev_periods = []
+        for brand, ga_info in ga_prev_dict.items():
+            if ga_info and 'period' in ga_info:
+                prev_periods.append(ga_info['period'])
+        
+        if prev_periods:
+            prev_start_dates = [p['start_date'] for p in prev_periods if p.get('start_date')]
+            prev_end_dates = [p['end_date'] for p in prev_periods if p.get('end_date')]
+            
+            if prev_start_dates and prev_end_dates:
+                overall['prev_start'] = min(prev_start_dates)
+                overall['prev_end'] = max(prev_end_dates)
+    
     return overall
 
 

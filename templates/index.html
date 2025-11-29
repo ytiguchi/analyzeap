@@ -30,17 +30,17 @@
             <a href="{{ url_for('switch_period', period_type='yesterday') }}" 
                class="period-tab {% if current_period == 'yesterday' %}active{% endif %} {% if 'yesterday' not in available_periods %}disabled{% endif %}"
                {% if 'yesterday' not in available_periods %}title="毎日12時に自動取得されます"{% endif %}>
-                🕐 前日
+                <span>🕐</span><span>前日</span>
             </a>
             <a href="{{ url_for('switch_period', period_type='3days') }}" 
                class="period-tab {% if current_period == '3days' %}active{% endif %} {% if '3days' not in available_periods %}disabled{% endif %}"
                {% if '3days' not in available_periods %}title="毎日12時に自動取得されます"{% endif %}>
-                📅 3日間
+                <span>📊</span><span>3日間</span>
             </a>
             <a href="{{ url_for('switch_period', period_type='weekly') }}" 
                class="period-tab {% if current_period == 'weekly' %}active{% endif %} {% if 'weekly' not in available_periods %}disabled{% endif %}"
                {% if 'weekly' not in available_periods %}title="毎日12時に自動取得されます"{% endif %}>
-                📆 週間
+                <span>📆</span><span>週間</span>
             </a>
         </div>
         {% if available_periods|length == 1 %}
@@ -75,6 +75,11 @@
                     期間情報なし
                 {% endif %}
             </div>
+            {% if analysis_period.prev_start and analysis_period.prev_end %}
+            <div class="period-comparison">
+                🔄 比較: {{ analysis_period.prev_start.strftime('%m/%d') }}〜{{ analysis_period.prev_end.strftime('%m/%d') }}
+            </div>
+            {% endif %}
         </div>
     </div>
     {% endif %}
@@ -314,6 +319,12 @@
     font-size: 0.85rem;
     color: var(--text-secondary);
     font-weight: 400;
+}
+
+.period-comparison {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
 }
 
 .period-banner-brands {
