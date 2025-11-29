@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+.env
+.env.local
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads and data
+uploads/
+*.csv
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+test_*.py
+generate_icons.py
+
+# Sensitive files
+env_final.txt
+env.template.txt
+env.example
+
+# Node
+node_modules/
+
+# Render specific
+render.yaml
+Procfile
+runtime.txt
+
+
