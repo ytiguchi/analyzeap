@@ -59,8 +59,8 @@ def find_latest_csv():
         csv_files = []
         for obj in response.get('Contents', []):
             key = obj['Key']
-            # ga4_data/ フォルダは除外（商品マスタのみ対象）
-            if key.endswith('.csv') and not key.startswith('ga4_data/'):
+            # ga4_data/ と periods/ フォルダは除外（商品マスタのみ対象）
+            if key.endswith('.csv') and not key.startswith('ga4_data/') and not key.startswith('periods/') and not key.startswith('config/'):
                 csv_files.append({
                     'key': key,
                     'last_modified': obj['LastModified'],
@@ -244,6 +244,13 @@ def load_period_data(period_type, brand, is_previous=False):
         response = client.get_object(Bucket=config['bucket_name'], Key=filename)
         content = response['Body'].read().decode('utf-8')
         df = pd.read_csv(StringIO(content))
+        
+        # 必須カラムの検証
+        required_cols = ['sku_id', 'views', 'add_to_cart', 'purchases', 'revenue']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            print(f"[WARN] Period data {period_type}/{brand} missing columns: {missing_cols}, skipping")
+            return None
         
         # メタデータから日付を取得
         metadata = response.get('Metadata', {})
