@@ -122,7 +122,14 @@ def fetch_ecommerce_data(brand: str, start_date: str, end_date: str) -> pd.DataF
             })
         
         df = pd.DataFrame(rows)
-        print(f"[OK] Fetched {len(df)} items from GA4 for {brand}")
+        
+        # 空のレスポンスの場合、カラムを明示的に設定
+        if len(df) == 0:
+            df = pd.DataFrame(columns=['sku_id', 'item_name', 'views', 'add_to_cart', 'purchases', 'revenue'])
+            print(f"[WARN] No data from GA4 for {brand} (empty response)")
+        else:
+            print(f"[OK] Fetched {len(df)} items from GA4 for {brand}")
+        
         return df
     
     except Exception as e:
