@@ -72,12 +72,66 @@
 <!-- タブ切り替え -->
 <section class="section">
     <div class="tabs">
+        <button class="tab" data-tab="pv" onclick="switchTab('pv')">
+            🔥 PVランキング ({{ pv_ranking|length }})
+        </button>
         <button class="tab" data-tab="top" onclick="switchTab('top')">
             🎨 カラー別売上TOP ({{ top_products|length }})
         </button>
         <button class="tab" data-tab="opportunity" onclick="switchTab('opportunity')">
             💡 機会損失 ({{ opportunity_products|length }})
         </button>
+    </div>
+
+    <!-- PVランキング（SKU別詳細付き） -->
+    <div id="tab-pv" class="tab-content" style="display: none;">
+        {% if pv_ranking %}
+            <div class="pv-ranking-list">
+                {% for p in pv_ranking %}
+                <div class="pv-card-detail animate-in" style="animation-delay: {{ loop.index * 0.03 }}s;">
+                    <div class="pv-card-rank">{{ loop.index }}</div>
+                    <div class="pv-card-main">
+                        <a href="{{ p.product_url or '#' }}" target="_blank" rel="noopener">
+                            <img src="{{ p.image_url or 'https://via.placeholder.com/180x180?text=No+Image' }}" 
+                                 alt="{{ p.product_name }}" 
+                                 class="pv-card-img"
+                                 onerror="this.src='https://via.placeholder.com/180x180?text=No+Image'">
+                        </a>
+                        <div class="pv-card-info">
+                            <div class="pv-card-brand">{{ p.brand }}</div>
+                            <div class="pv-card-name">{{ p.product_name }}</div>
+                            <div class="pv-card-summary">
+                                <span class="pv-badge">PV {{ "{:,}".format(p.views|int) }}</span>
+                                <span class="cvr-badge {% if (p.cvr or 0) >= 1 %}high{% elif (p.cvr or 0) >= 0.5 %}mid{% endif %}">CVR {{ "%.2f"|format(p.cvr or 0) }}%</span>
+                                <span class="purchase-badge">購入 {{ p.purchases|int }}</span>
+                            </div>
+                            <!-- SKU別詳細 -->
+                            {% if p.skus %}
+                            <div class="sku-details">
+                                {% for sku in p.skus[:8] %}
+                                <div class="sku-chip">
+                                    <span class="sku-color" style="background: {{ sku.color_tag or '#888' }};"></span>
+                                    <span class="sku-info">{{ sku.color_name or '-' }} / {{ sku.size or '-' }}</span>
+                                    <span class="sku-pv">PV {{ "{:,}".format(sku.views|int) }}</span>
+                                    <span class="sku-cvr {% if (sku.cvr or 0) >= 1 %}high{% endif %}">{{ "%.1f"|format(sku.cvr or 0) }}%</span>
+                                </div>
+                                {% endfor %}
+                                {% if p.skus|length > 8 %}
+                                <div class="sku-more">+{{ p.skus|length - 8 }}件</div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="card" style="text-align: center; padding: 3rem;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
+                <p style="color: var(--text-secondary);">PVデータがありません</p>
+            </div>
+        {% endif %}
     </div>
 
     {# 在庫過多×低売上 - 設計見直し中のため一時的に非表示
@@ -644,6 +698,170 @@
     box-shadow: 0 3px 10px rgba(232, 164, 164, 0.4);
 }
 
+/* ====== PVランキング（SKU詳細付き） ====== */
+.pv-ranking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.pv-card-detail {
+    display: flex;
+    gap: 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1rem;
+    transition: all 0.3s ease;
+}
+
+.pv-card-detail:hover {
+    border-color: var(--accent-pink);
+    box-shadow: var(--shadow-hover);
+}
+
+.pv-card-rank {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-warm);
+    color: white;
+    font-weight: 800;
+    font-size: 1.1rem;
+    border-radius: 10px;
+    flex-shrink: 0;
+    font-family: 'DM Sans', sans-serif;
+}
+
+.pv-card-main {
+    display: flex;
+    gap: 1rem;
+    flex: 1;
+}
+
+.pv-card-img {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 12px;
+    flex-shrink: 0;
+}
+
+.pv-card-info {
+    flex: 1;
+}
+
+.pv-card-brand {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.pv-card-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.pv-card-summary {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.pv-badge, .cvr-badge, .purchase-badge {
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+}
+
+.pv-badge {
+    background: rgba(232, 164, 164, 0.2);
+    color: var(--accent-rose);
+}
+
+.cvr-badge {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+}
+
+.cvr-badge.high {
+    background: rgba(157, 196, 176, 0.2);
+    color: #5A8A6F;
+}
+
+.cvr-badge.mid {
+    background: rgba(229, 193, 133, 0.2);
+    color: #B8944A;
+}
+
+.purchase-badge {
+    background: rgba(201, 184, 217, 0.2);
+    color: var(--accent-lavender);
+}
+
+/* SKU詳細チップ */
+.sku-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.sku-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    font-size: 0.7rem;
+}
+
+.sku-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.sku-info {
+    color: var(--text-secondary);
+    max-width: 100px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sku-pv {
+    color: var(--accent-rose);
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+}
+
+.sku-cvr {
+    color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+}
+
+.sku-cvr.high {
+    color: #5A8A6F;
+    font-weight: 600;
+}
+
+.sku-more {
+    padding: 0.3rem 0.6rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
 /* レスポンシブ */
 @media (max-width: 1200px) {
     .grouped-product-grid {
@@ -660,6 +878,8 @@
     .sku-item { flex-direction: column; align-items: flex-start; }
     .sku-metrics { width: 100%; justify-content: space-between; margin-top: 0.5rem; }
     .grouped-product-totals { grid-template-columns: repeat(2, 1fr); }
+    .pv-card-main { flex-direction: column; }
+    .pv-card-img { width: 100%; height: 200px; }
 }
 </style>
 
@@ -684,7 +904,7 @@ function switchTab(tabName) {
 }
 
 const urlParams = new URLSearchParams(window.location.search);
-const initialTab = urlParams.get('tab') || 'top';
+const initialTab = urlParams.get('tab') || 'pv';
 switchTab(initialTab);
 </script>
 {% endblock %}

@@ -424,7 +424,7 @@ def get_top_performers(brand=None, limit=30):
 
 
 def get_pv_ranking(brand=None, limit=50):
-    """PV（閲覧数）ランキングを取得（商品名でグループ化）"""
+    """PV（閲覧数）ランキングを取得（商品名でグループ化、SKU詳細付き）"""
     df = data_store['merged_data']
     if df is None:
         return []
@@ -458,7 +458,22 @@ def get_pv_ranking(brand=None, limit=50):
         grouped['purchase_rate'] = grouped['cvr']
         
         grouped = grouped.sort_values('views', ascending=False).head(limit)
-        return grouped.to_dict('records')
+        
+        # SKU詳細を追加
+        result = []
+        for _, row in grouped.iterrows():
+            product = row.to_dict()
+            # このproduct_class_idに属するSKUを取得
+            skus = filtered[filtered['product_class_id'] == row['product_class_id']].copy()
+            # 各SKUのCVRを計算
+            skus['cvr'] = skus.apply(
+                lambda x: (x['purchases'] / x['views'] * 100) if x['views'] > 0 else 0, axis=1
+            )
+            skus = skus.sort_values('views', ascending=False)
+            product['skus'] = skus[['color_name', 'color_tag', 'size', 'views', 'purchases', 'cvr', 'total_stock']].to_dict('records')
+            result.append(product)
+        
+        return result
     
     filtered = filtered.sort_values('views', ascending=False).head(limit)
     return filtered.to_dict('records')
