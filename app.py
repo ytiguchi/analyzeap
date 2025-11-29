@@ -429,65 +429,79 @@ def get_pv_ranking(brand=None, limit=50):
     if df is None:
         return []
     
-    filtered = df.copy()
+    # ブランドフィルタ
     if brand and brand != 'all':
-        filtered = filtered[filtered['brand'] == brand]
-    
-    # 閲覧数が0より大きいものだけ
-    filtered = filtered[filtered['views'] > 0]
+        df = df[df['brand'] == brand].copy()
+    else:
+        df = df.copy()
     
     # 商品名（product_class_id）でグループ化して集計
-    if 'product_class_id' in filtered.columns:
-        grouped = filtered.groupby('product_class_id').agg({
-            'brand': 'first',
-            'product_name': 'first',
-            'image_url': 'first',
-            'product_url': 'first',
-            'views': 'first',  # GA4のPVは商品名レベルで同じ値なので first で取得
-            'add_to_cart': 'sum',
-            'purchases': 'sum',
-            'revenue': 'sum',
-            'total_stock': 'sum',
-        }).reset_index()
-        
-        # CVR（PVに対する購入率）= 購入数 / PV * 100
-        grouped['cvr'] = grouped.apply(
-            lambda x: float(x['purchases']) / float(x['views']) * 100 if float(x['views']) > 0 else 0.0, axis=1
-        )
-        # 互換性のためにpurchase_rateも設定
-        grouped['purchase_rate'] = grouped['cvr']
-        
-        grouped = grouped.sort_values('views', ascending=False).head(limit)
-        
-        # SKU詳細を追加
-        result = []
-        for _, row in grouped.iterrows():
-            product = row.to_dict()
-            # このproduct_class_idに属するSKUを取得
-            skus = filtered[filtered['product_class_id'] == row['product_class_id']].copy()
-            
-            if len(skus) > 0:
-                # 各SKUのCVRを計算（購入÷PV）
-                skus['sku_cvr'] = skus.apply(
-                    lambda x: (x['purchases'] / x['views'] * 100) if x['views'] > 0 else 0, axis=1
-                )
-                skus = skus.sort_values('views', ascending=False)
-                
-                # SKUデータを辞書リストに変換（必要なカラムのみ）
-                sku_cols = ['color_name', 'color_tag', 'size', 'views', 'add_to_cart', 'purchases', 'sku_cvr', 'total_stock']
-                available_cols = [c for c in sku_cols if c in skus.columns]
-                sku_df = skus[available_cols].copy()
-                sku_df = sku_df.rename(columns={'sku_cvr': 'cvr'})
-                product['skus'] = sku_df.to_dict('records')
-            else:
-                product['skus'] = []
-            
-            result.append(product)
-        
-        return result
+    if 'product_class_id' not in df.columns:
+        return []
     
-    filtered = filtered.sort_values('views', ascending=False).head(limit)
-    return filtered.to_dict('records')
+    # 閲覧数が0より大きい商品のみ（グループ集計前）
+    products_with_views = df[df['views'] > 0]['product_class_id'].unique()
+    
+    grouped = df.groupby('product_class_id').agg({
+        'brand': 'first',
+        'product_name': 'first',
+        'image_url': 'first',
+        'product_url': 'first',
+        'views': 'first',  # GA4のPVは商品名レベルで同じ値
+        'add_to_cart': 'sum',
+        'purchases': 'sum',
+        'revenue': 'sum',
+        'total_stock': 'sum',
+    }).reset_index()
+    
+    # PVがある商品のみ
+    grouped = grouped[grouped['product_class_id'].isin(products_with_views)]
+    
+    # CVR（PVに対する購入率）= 購入数 / PV * 100
+    grouped['cvr'] = grouped.apply(
+        lambda x: float(x['purchases']) / float(x['views']) * 100 if float(x['views']) > 0 else 0.0, axis=1
+    )
+    grouped['purchase_rate'] = grouped['cvr']
+    
+    grouped = grouped.sort_values('views', ascending=False).head(limit)
+    
+    # SKU詳細を追加（元のdfから取得）
+    result = []
+    for _, row in grouped.iterrows():
+        product = row.to_dict()
+        
+        # このproduct_class_idに属する全SKUを取得（元データから）
+        skus = df[df['product_class_id'] == row['product_class_id']].copy()
+        
+        if len(skus) > 0:
+            # 各SKUのCVRを計算
+            skus['cvr'] = skus.apply(
+                lambda x: (float(x['purchases']) / float(x['views']) * 100) if float(x['views']) > 0 else 0.0, axis=1
+            )
+            
+            # カラー・サイズでソート
+            skus = skus.sort_values(['color_name', 'size'], ascending=True)
+            
+            # SKUデータを辞書リストに変換
+            sku_list = []
+            for _, s in skus.iterrows():
+                sku_list.append({
+                    'color_name': str(s.get('color_name', '') or ''),
+                    'color_tag': str(s.get('color_tag', '#888') or '#888'),
+                    'size': str(s.get('size', '') or ''),
+                    'views': int(s.get('views', 0) or 0),
+                    'add_to_cart': int(s.get('add_to_cart', 0) or 0),
+                    'purchases': int(s.get('purchases', 0) or 0),
+                    'cvr': float(s.get('cvr', 0) or 0),
+                    'total_stock': int(s.get('total_stock', 0) or 0),
+                })
+            product['skus'] = sku_list
+        else:
+            product['skus'] = []
+        
+        result.append(product)
+    
+    return result
 
 
 def get_pv_ranking_by_brand(limit_per_brand=30):

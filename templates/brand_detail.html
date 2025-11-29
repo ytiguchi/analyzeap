@@ -124,29 +124,27 @@
                             💰 ¥{{ "{:,.0f}".format(p.revenue or 0) }}
                         </div>
                         
-                        <!-- SKU別詳細 -->
+                        <!-- SKU別詳細（2カラム） -->
                         {% if p.skus and p.skus|length > 0 %}
-                        <div class="sku-list">
-                            <div class="sku-header">カラー/サイズ別</div>
-                            {% for sku in p.skus[:8] %}
-                            <div class="sku-row">
-                                <span class="sku-color-dot" style="background: {{ sku.color_tag or '#888' }};"></span>
-                                <span class="sku-name">{{ sku.color_name or '-' }} / {{ sku.size or '-' }}</span>
-                                <span class="sku-metrics">
-                                    <span class="sku-pv-val">PV {{ sku.views|int }}</span>
-                                    <span class="sku-cvr-val {% if (sku.cvr or 0) >= 1 %}high{% endif %}">{{ "%.1f"|format(sku.cvr or 0) }}%</span>
-                                </span>
+                        <div class="sku-section">
+                            <div class="sku-header">📦 バリエーション（{{ p.skus|length }}件）</div>
+                            <div class="sku-grid">
+                                {% for sku in p.skus[:12] %}
+                                <div class="sku-item">
+                                    <div class="sku-color-box" style="background: {{ sku.color_tag or '#ddd' }};"></div>
+                                    <div class="sku-detail">
+                                        <div class="sku-color-name">{{ sku.color_name or '-' }}</div>
+                                        <div class="sku-size-name">{{ sku.size or '-' }}</div>
+                                    </div>
+                                    <div class="sku-stats">
+                                        <span class="sku-stock {% if sku.total_stock <= 3 %}low{% endif %}">在庫 {{ sku.total_stock }}</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
                             </div>
-                            {% endfor %}
-                            {% if p.skus|length > 8 %}
-                            <div class="sku-row more">+{{ p.skus|length - 8 }}件のバリエーション</div>
+                            {% if p.skus|length > 12 %}
+                            <div class="sku-more-link">+{{ p.skus|length - 12 }}件</div>
                             {% endif %}
-                        </div>
-                        {% else %}
-                        <div class="sku-list">
-                            <div class="sku-row" style="justify-content: center; color: var(--text-muted);">
-                                SKU詳細なし
-                            </div>
                         </div>
                         {% endif %}
                     </div>
@@ -853,77 +851,83 @@
     margin-bottom: 0.75rem;
 }
 
-/* SKUリスト */
-.sku-list {
+/* SKUセクション（2カラム） */
+.sku-section {
     border-top: 1px solid var(--border-color);
     padding-top: 0.75rem;
     margin-top: 0.5rem;
 }
 
 .sku-header {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
     font-weight: 600;
 }
 
-.sku-row {
+.sku-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem;
+}
+
+.sku-item {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.35rem 0;
-    font-size: 0.75rem;
+    padding: 0.4rem 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    font-size: 0.7rem;
 }
 
-.sku-row:not(:last-child) {
-    border-bottom: 1px dashed var(--border-color);
-}
-
-.sku-color-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
+.sku-color-box {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
     border: 1px solid rgba(0,0,0,0.1);
     flex-shrink: 0;
 }
 
-.sku-name {
+.sku-detail {
     flex: 1;
-    color: var(--text-secondary);
+    min-width: 0;
+}
+
+.sku-color-name {
+    font-weight: 600;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 0.7rem;
 }
 
-.sku-metrics {
-    display: flex;
-    gap: 0.5rem;
+.sku-size-name {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+}
+
+.sku-stats {
+    flex-shrink: 0;
+}
+
+.sku-stock {
+    font-size: 0.65rem;
+    color: var(--text-muted);
     font-family: 'DM Sans', sans-serif;
 }
 
-.sku-pv-val {
+.sku-stock.low {
     color: var(--accent-rose);
     font-weight: 600;
-    min-width: 35px;
-    text-align: right;
 }
 
-.sku-cvr-val {
-    color: var(--text-muted);
-    min-width: 40px;
-    text-align: right;
-}
-
-.sku-cvr-val.high {
-    color: #5A8A6F;
-    font-weight: 600;
-}
-
-.sku-row.more {
-    justify-content: center;
+.sku-more-link {
+    text-align: center;
     color: var(--text-muted);
     font-size: 0.7rem;
+    padding-top: 0.5rem;
 }
 
 /* レスポンシブ */
