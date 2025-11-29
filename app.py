@@ -450,9 +450,9 @@ def get_pv_ranking(brand=None, limit=50):
             'total_stock': 'sum',
         }).reset_index()
         
-        # CVR（PVに対する購入率）
+        # CVR（PVに対する購入率）= 購入数 / PV * 100
         grouped['cvr'] = grouped.apply(
-            lambda x: (x['purchases'] / x['views'] * 100) if x['views'] > 0 else 0, axis=1
+            lambda x: float(x['purchases']) / float(x['views']) * 100 if float(x['views']) > 0 else 0.0, axis=1
         )
         # 互換性のためにpurchase_rateも設定
         grouped['purchase_rate'] = grouped['cvr']
