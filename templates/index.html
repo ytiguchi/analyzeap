@@ -151,33 +151,6 @@
     </section>
     #}
 
-    {# 在庫過多×低売上 - 設計見直し中のため一時的に非表示
-            <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=problem" class="card animate-in delay-2" style="text-decoration: none;">
-                <div style="font-size: 2rem; margin-bottom: 0.75rem;">🚨</div>
-                <h3 style="color: var(--accent-coral); margin-bottom: 0.5rem; font-size: 1rem;">在庫過多×低売上</h3>
-                <p style="color: var(--text-secondary); font-size: 0.85rem;">
-                    在庫が多いのに売れていない
-                </p>
-            </a>
-            #}
-
-            <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=opportunity" class="card animate-in delay-3" style="text-decoration: none;">
-                <div style="font-size: 2rem; margin-bottom: 0.75rem;">💡</div>
-                <h3 style="color: var(--accent-gold); margin-bottom: 0.5rem; font-size: 1rem;">機会損失</h3>
-                <p style="color: var(--text-secondary); font-size: 0.85rem;">
-                    閲覧多×在庫切れで売り逃し
-                </p>
-            </a>
-
-            <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=top" class="card animate-in delay-4" style="text-decoration: none;">
-                <div style="font-size: 2rem; margin-bottom: 0.75rem;">🏆</div>
-                <h3 style="color: var(--accent-mint); margin-bottom: 0.5rem; font-size: 1rem;">売上TOP</h3>
-                <p style="color: var(--text-secondary); font-size: 0.85rem;">
-                    売上上位の好調商品
-                </p>
-            </a>
-        </div>
-    </section>
 {% endif %}
 
 <style>
