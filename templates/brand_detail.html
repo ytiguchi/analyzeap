@@ -124,26 +124,43 @@
                             💰 ¥{{ "{:,.0f}".format(p.revenue or 0) }}
                         </div>
                         
-                        <!-- SKU別詳細（2カラム） -->
+                        <!-- SKU別詳細（購入数順） -->
                         {% if p.skus and p.skus|length > 0 %}
                         <div class="sku-section">
-                            <div class="sku-header">📦 バリエーション（{{ p.skus|length }}件）</div>
-                            <div class="sku-grid">
-                                {% for sku in p.skus[:12] %}
-                                <div class="sku-item">
-                                    <div class="sku-color-box" style="background: {{ sku.color_tag or '#ddd' }};"></div>
-                                    <div class="sku-detail">
-                                        <div class="sku-color-name">{{ sku.color_name or '-' }}</div>
-                                        <div class="sku-size-name">{{ sku.size or '-' }}</div>
+                            <div class="sku-header">📦 バリエーション（{{ p.skus|length }}件・購入数順）</div>
+                            <div class="sku-table">
+                                {% for sku in p.skus[:10] %}
+                                <div class="sku-row-full {% if loop.index <= 3 %}top-sku{% endif %}">
+                                    <div class="sku-left">
+                                        <div class="sku-color-box" style="background: {{ sku.color_tag or '#ddd' }};"></div>
+                                        <div class="sku-name-wrap">
+                                            <span class="sku-color-text">{{ sku.color_name or '-' }}</span>
+                                            <span class="sku-size-text">{{ sku.size or '-' }}</span>
+                                        </div>
                                     </div>
-                                    <div class="sku-stats">
-                                        <span class="sku-stock {% if sku.total_stock <= 3 %}low{% endif %}">在庫 {{ sku.total_stock }}</span>
+                                    <div class="sku-metrics-row">
+                                        <div class="sku-metric-item">
+                                            <span class="sku-val">{{ sku.add_to_cart|int }}</span>
+                                            <span class="sku-lbl">カート</span>
+                                        </div>
+                                        <div class="sku-metric-item">
+                                            <span class="sku-val {% if sku.purchases > 0 %}has-purchase{% endif %}">{{ sku.purchases|int }}</span>
+                                            <span class="sku-lbl">購入</span>
+                                        </div>
+                                        <div class="sku-metric-item">
+                                            <span class="sku-val cvr {% if (sku.cvr or 0) >= 1 %}high{% endif %}">{{ "%.1f"|format(sku.cvr or 0) }}%</span>
+                                            <span class="sku-lbl">CVR</span>
+                                        </div>
+                                        <div class="sku-metric-item stock">
+                                            <span class="sku-val {% if sku.total_stock <= 3 %}low{% endif %}">{{ sku.total_stock|int }}</span>
+                                            <span class="sku-lbl">在庫</span>
+                                        </div>
                                     </div>
                                 </div>
                                 {% endfor %}
                             </div>
-                            {% if p.skus|length > 12 %}
-                            <div class="sku-more-link">+{{ p.skus|length - 12 }}件</div>
+                            {% if p.skus|length > 10 %}
+                            <div class="sku-more-link">+{{ p.skus|length - 10 }}件のバリエーション</div>
                             {% endif %}
                         </div>
                         {% endif %}
@@ -851,7 +868,7 @@
     margin-bottom: 0.75rem;
 }
 
-/* SKUセクション（2カラム） */
+/* SKUセクション */
 .sku-section {
     border-top: 1px solid var(--border-color);
     padding-top: 0.75rem;
@@ -859,74 +876,113 @@
 }
 
 .sku-header {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-secondary);
     margin-bottom: 0.5rem;
     font-weight: 600;
 }
 
-.sku-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.4rem;
+.sku-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
 }
 
-.sku-item {
+.sku-row-full {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: space-between;
     padding: 0.4rem 0.5rem;
     background: var(--bg-secondary);
     border-radius: 8px;
     font-size: 0.7rem;
 }
 
+.sku-row-full.top-sku {
+    background: linear-gradient(135deg, rgba(232, 164, 164, 0.1) 0%, rgba(201, 184, 217, 0.1) 100%);
+    border: 1px solid rgba(232, 164, 164, 0.2);
+}
+
+.sku-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+}
+
 .sku-color-box {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 4px;
     border: 1px solid rgba(0,0,0,0.1);
     flex-shrink: 0;
 }
 
-.sku-detail {
-    flex: 1;
+.sku-name-wrap {
+    display: flex;
+    gap: 0.3rem;
+    align-items: baseline;
     min-width: 0;
 }
 
-.sku-color-name {
+.sku-color-text {
     font-weight: 600;
     color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     font-size: 0.7rem;
 }
 
-.sku-size-name {
+.sku-size-text {
     color: var(--text-muted);
     font-size: 0.65rem;
 }
 
-.sku-stats {
+.sku-metrics-row {
+    display: flex;
+    gap: 0.5rem;
     flex-shrink: 0;
 }
 
-.sku-stock {
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    font-family: 'DM Sans', sans-serif;
+.sku-metric-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 32px;
 }
 
-.sku-stock.low {
+.sku-metric-item.stock {
+    min-width: 28px;
+}
+
+.sku-val {
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text-primary);
+}
+
+.sku-val.has-purchase {
+    color: var(--accent-lavender);
+}
+
+.sku-val.cvr.high {
+    color: #5A8A6F;
+}
+
+.sku-val.low {
     color: var(--accent-rose);
-    font-weight: 600;
+}
+
+.sku-lbl {
+    font-size: 0.5rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
 }
 
 .sku-more-link {
     text-align: center;
     color: var(--text-muted);
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     padding-top: 0.5rem;
 }
 

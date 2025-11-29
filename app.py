@@ -479,8 +479,8 @@ def get_pv_ranking(brand=None, limit=50):
                 lambda x: (float(x['purchases']) / float(x['views']) * 100) if float(x['views']) > 0 else 0.0, axis=1
             )
             
-            # カラー・サイズでソート
-            skus = skus.sort_values(['color_name', 'size'], ascending=True)
+            # 購入数の多い順にソート（優れている順）
+            skus = skus.sort_values('purchases', ascending=False)
             
             # SKUデータを辞書リストに変換
             sku_list = []
