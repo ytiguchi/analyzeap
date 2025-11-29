@@ -424,7 +424,17 @@ def merge_and_analyze_for_period(period_type):
         return None
     
     # 現在期間のマージ
-    ga_list = [info['data'] for info in ga_dict.values() if info and 'data' in info and len(info['data']) > 0]
+    required_cols = ['sku_id', 'views', 'add_to_cart', 'purchases', 'revenue']
+    ga_list = []
+    for info in ga_dict.values():
+        if info and 'data' in info and len(info['data']) > 0:
+            df = info['data']
+            # 必須カラムがすべて存在するか確認
+            if all(col in df.columns for col in required_cols):
+                ga_list.append(df)
+            else:
+                print(f"[WARN] Skipping data with missing columns: {[c for c in required_cols if c not in df.columns]}")
+    
     if not ga_list:
         return None
     
@@ -447,7 +457,13 @@ def merge_and_analyze_for_period(period_type):
     
     # 前期間のマージ
     if ga_dict_prev:
-        ga_list_prev = [info['data'] for info in ga_dict_prev.values() if info and 'data' in info and len(info['data']) > 0]
+        ga_list_prev = []
+        for info in ga_dict_prev.values():
+            if info and 'data' in info and len(info['data']) > 0:
+                df = info['data']
+                if all(col in df.columns for col in required_cols):
+                    ga_list_prev.append(df)
+        
         if ga_list_prev:
             ga_prev = pd.concat(ga_list_prev, ignore_index=True)
             ga_prev = ga_prev.groupby('sku_id').agg({
@@ -476,7 +492,18 @@ def merge_and_analyze():
         return None
     
     # 全ブランドのGAデータを結合
-    ga_list = [info['data'] for info in ga_dict.values() if info and 'data' in info and len(info['data']) > 0]
+    required_cols = ['sku_id', 'views', 'add_to_cart', 'purchases', 'revenue']
+    ga_list = []
+    for brand, info in ga_dict.items():
+        if info and 'data' in info and len(info['data']) > 0:
+            df = info['data']
+            # 必須カラムがすべて存在するか確認
+            if all(col in df.columns for col in required_cols):
+                ga_list.append(df)
+            else:
+                missing = [c for c in required_cols if c not in df.columns]
+                print(f"[WARN] Skipping {brand} data - missing columns: {missing}")
+    
     if not ga_list:
         return None
     
@@ -553,7 +580,14 @@ def merge_and_analyze():
     # 前期間データとの比較（デルタ計算）
     ga_prev_dict = data_store.get('ga_sales_previous', {})
     if ga_prev_dict:
-        ga_prev_list = [info['data'] for info in ga_prev_dict.values() if info and 'data' in info and len(info['data']) > 0]
+        required_prev_cols = ['sku_id', 'views', 'add_to_cart', 'purchases', 'revenue']
+        ga_prev_list = []
+        for info in ga_prev_dict.values():
+            if info and 'data' in info and len(info['data']) > 0:
+                df = info['data']
+                if all(col in df.columns for col in required_prev_cols):
+                    ga_prev_list.append(df)
+        
         if ga_prev_list:
             ga_prev = pd.concat(ga_prev_list, ignore_index=True)
             ga_prev = ga_prev.groupby('sku_id').agg({
