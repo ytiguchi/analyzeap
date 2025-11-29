@@ -80,45 +80,68 @@
         </button>
     </div>
 
-    <!-- PVランキング（SKU別詳細付き） -->
+    <!-- PVランキング（2カラム・SKU別詳細付き） -->
     <div id="tab-pv" class="tab-content" style="display: none;">
         {% if pv_ranking %}
-            <div class="pv-ranking-list">
+            <div class="pv-grid-2col">
                 {% for p in pv_ranking %}
-                <div class="pv-card-detail animate-in" style="animation-delay: {{ loop.index * 0.03 }}s;">
-                    <div class="pv-card-rank">{{ loop.index }}</div>
-                    <div class="pv-card-main">
-                        <a href="{{ p.product_url or '#' }}" target="_blank" rel="noopener">
-                            <img src="{{ p.image_url or 'https://via.placeholder.com/180x180?text=No+Image' }}" 
+                <div class="pv-card-v2 animate-in" style="animation-delay: {{ loop.index * 0.02 }}s;">
+                    <div class="pv-card-header">
+                        <div class="pv-rank-badge">{{ loop.index }}</div>
+                        <a href="{{ p.product_url or '#' }}" target="_blank" rel="noopener" class="pv-img-link">
+                            <img src="{{ p.image_url or 'https://via.placeholder.com/200x200?text=No+Image' }}" 
                                  alt="{{ p.product_name }}" 
-                                 class="pv-card-img"
-                                 onerror="this.src='https://via.placeholder.com/180x180?text=No+Image'">
+                                 class="pv-card-image"
+                                 onerror="this.src='https://via.placeholder.com/200x200?text=No+Image'">
                         </a>
-                        <div class="pv-card-info">
-                            <div class="pv-card-brand">{{ p.brand }}</div>
-                            <div class="pv-card-name">{{ p.product_name }}</div>
-                            <div class="pv-card-summary">
-                                <span class="pv-badge">PV {{ "{:,}".format(p.views|int) }}</span>
-                                <span class="cvr-badge {% if (p.cvr or 0) >= 1 %}high{% elif (p.cvr or 0) >= 0.5 %}mid{% endif %}">CVR {{ "%.2f"|format(p.cvr or 0) }}%</span>
-                                <span class="purchase-badge">購入 {{ p.purchases|int }}</span>
+                    </div>
+                    <div class="pv-card-body">
+                        <div class="pv-card-brand">{{ p.brand }}</div>
+                        <div class="pv-card-title">{{ p.product_name }}</div>
+                        
+                        <!-- 全体サマリー -->
+                        <div class="pv-summary-grid">
+                            <div class="pv-stat">
+                                <span class="pv-stat-value pv-color">{{ "{:,}".format(p.views|int) }}</span>
+                                <span class="pv-stat-label">PV</span>
                             </div>
-                            <!-- SKU別詳細 -->
-                            {% if p.skus %}
-                            <div class="sku-details">
-                                {% for sku in p.skus[:8] %}
-                                <div class="sku-chip">
-                                    <span class="sku-color" style="background: {{ sku.color_tag or '#888' }};"></span>
-                                    <span class="sku-info">{{ sku.color_name or '-' }} / {{ sku.size or '-' }}</span>
-                                    <span class="sku-pv">PV {{ "{:,}".format(sku.views|int) }}</span>
-                                    <span class="sku-cvr {% if (sku.cvr or 0) >= 1 %}high{% endif %}">{{ "%.1f"|format(sku.cvr or 0) }}%</span>
-                                </div>
-                                {% endfor %}
-                                {% if p.skus|length > 8 %}
-                                <div class="sku-more">+{{ p.skus|length - 8 }}件</div>
-                                {% endif %}
+                            <div class="pv-stat">
+                                <span class="pv-stat-value">{{ p.add_to_cart|int }}</span>
+                                <span class="pv-stat-label">カート</span>
                             </div>
+                            <div class="pv-stat">
+                                <span class="pv-stat-value">{{ p.purchases|int }}</span>
+                                <span class="pv-stat-label">購入</span>
+                            </div>
+                            <div class="pv-stat">
+                                <span class="pv-stat-value {% if (p.cvr or 0) >= 1 %}cvr-high{% endif %}">{{ "%.2f"|format(p.cvr or 0) }}%</span>
+                                <span class="pv-stat-label">CVR</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 売上 -->
+                        <div class="pv-revenue">
+                            💰 ¥{{ "{:,.0f}".format(p.revenue or 0) }}
+                        </div>
+                        
+                        <!-- SKU別詳細 -->
+                        {% if p.skus %}
+                        <div class="sku-list">
+                            {% for sku in p.skus[:6] %}
+                            <div class="sku-row">
+                                <span class="sku-color-dot" style="background: {{ sku.color_tag or '#888' }};"></span>
+                                <span class="sku-name">{{ sku.color_name or '-' }} / {{ sku.size or '-' }}</span>
+                                <span class="sku-metrics">
+                                    <span class="sku-pv-val">{{ sku.views|int }}</span>
+                                    <span class="sku-cvr-val {% if (sku.cvr or 0) >= 1 %}high{% endif %}">{{ "%.1f"|format(sku.cvr or 0) }}%</span>
+                                </span>
+                            </div>
+                            {% endfor %}
+                            {% if p.skus|length > 6 %}
+                            <div class="sku-row more">+{{ p.skus|length - 6 }}件</div>
                             {% endif %}
                         </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -695,168 +718,196 @@
     box-shadow: 0 3px 10px rgba(232, 164, 164, 0.4);
 }
 
-/* ====== PVランキング（SKU詳細付き） ====== */
-.pv-ranking-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+/* ====== PVランキング（2カラム・SKU詳細付き） ====== */
+.pv-grid-2col {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
 }
 
-.pv-card-detail {
-    display: flex;
-    gap: 1rem;
+.pv-card-v2 {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 1rem;
+    border-radius: 20px;
+    overflow: hidden;
     transition: all 0.3s ease;
+    box-shadow: var(--shadow-soft);
 }
 
-.pv-card-detail:hover {
+.pv-card-v2:hover {
     border-color: var(--accent-pink);
     box-shadow: var(--shadow-hover);
+    transform: translateY(-4px);
 }
 
-.pv-card-rank {
-    width: 36px;
-    height: 36px;
+.pv-card-header {
+    position: relative;
+}
+
+.pv-rank-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--gradient-warm);
     color: white;
     font-weight: 800;
-    font-size: 1.1rem;
-    border-radius: 10px;
-    flex-shrink: 0;
+    font-size: 1.2rem;
+    border-radius: 12px;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(232, 164, 164, 0.4);
     font-family: 'DM Sans', sans-serif;
 }
 
-.pv-card-main {
-    display: flex;
-    gap: 1rem;
-    flex: 1;
+.pv-img-link {
+    display: block;
 }
 
-.pv-card-img {
-    width: 120px;
-    height: 120px;
+.pv-card-image {
+    width: 100%;
+    aspect-ratio: 1;
     object-fit: cover;
-    border-radius: 12px;
-    flex-shrink: 0;
+    transition: transform 0.3s ease;
 }
 
-.pv-card-info {
-    flex: 1;
+.pv-card-v2:hover .pv-card-image {
+    transform: scale(1.03);
+}
+
+.pv-card-body {
+    padding: 1rem;
 }
 
 .pv-card-brand {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pv-card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+    line-height: 1.3;
+}
+
+/* サマリーグリッド */
+.pv-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.pv-stat {
+    text-align: center;
+    padding: 0.5rem 0.25rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+.pv-stat-value {
+    display: block;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text-primary);
+}
+
+.pv-stat-value.pv-color {
+    color: var(--accent-rose);
+}
+
+.pv-stat-value.cvr-high {
+    color: #5A8A6F;
+}
+
+.pv-stat-label {
+    font-size: 0.65rem;
     color: var(--text-muted);
     text-transform: uppercase;
 }
 
-.pv-card-name {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 0.5rem;
-}
-
-.pv-card-summary {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-    flex-wrap: wrap;
-}
-
-.pv-badge, .cvr-badge, .purchase-badge {
-    padding: 0.25rem 0.6rem;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    font-family: 'DM Sans', sans-serif;
-}
-
-.pv-badge {
-    background: rgba(232, 164, 164, 0.2);
-    color: var(--accent-rose);
-}
-
-.cvr-badge {
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
-}
-
-.cvr-badge.high {
-    background: rgba(157, 196, 176, 0.2);
-    color: #5A8A6F;
-}
-
-.cvr-badge.mid {
-    background: rgba(229, 193, 133, 0.2);
-    color: #B8944A;
-}
-
-.purchase-badge {
-    background: rgba(201, 184, 217, 0.2);
-    color: var(--accent-lavender);
-}
-
-/* SKU詳細チップ */
-.sku-details {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-}
-
-.sku-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.3rem 0.6rem;
-    background: var(--bg-secondary);
+/* 売上 */
+.pv-revenue {
+    text-align: center;
+    padding: 0.5rem;
+    background: linear-gradient(135deg, rgba(157, 196, 176, 0.15) 0%, rgba(157, 196, 176, 0.05) 100%);
     border-radius: 8px;
-    font-size: 0.7rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #5A8A6F;
+    margin-bottom: 0.75rem;
 }
 
-.sku-color {
-    width: 14px;
-    height: 14px;
-    border-radius: 4px;
-    border: 1px solid var(--border-color);
+/* SKUリスト */
+.sku-list {
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.75rem;
 }
 
-.sku-info {
+.sku-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+    font-size: 0.75rem;
+}
+
+.sku-row:not(:last-child) {
+    border-bottom: 1px dashed var(--border-color);
+}
+
+.sku-color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    border: 1px solid rgba(0,0,0,0.1);
+    flex-shrink: 0;
+}
+
+.sku-name {
+    flex: 1;
     color: var(--text-secondary);
-    max-width: 100px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.sku-pv {
+.sku-metrics {
+    display: flex;
+    gap: 0.5rem;
+    font-family: 'DM Sans', sans-serif;
+}
+
+.sku-pv-val {
     color: var(--accent-rose);
     font-weight: 600;
-    font-family: 'DM Sans', sans-serif;
+    min-width: 35px;
+    text-align: right;
 }
 
-.sku-cvr {
+.sku-cvr-val {
     color: var(--text-muted);
-    font-family: 'DM Sans', sans-serif;
+    min-width: 40px;
+    text-align: right;
 }
 
-.sku-cvr.high {
+.sku-cvr-val.high {
     color: #5A8A6F;
     font-weight: 600;
 }
 
-.sku-more {
-    padding: 0.3rem 0.6rem;
-    background: var(--bg-secondary);
-    border-radius: 8px;
-    font-size: 0.7rem;
+.sku-row.more {
+    justify-content: center;
     color: var(--text-muted);
+    font-size: 0.7rem;
 }
 
 /* レスポンシブ */
@@ -875,8 +926,8 @@
     .sku-item { flex-direction: column; align-items: flex-start; }
     .sku-metrics { width: 100%; justify-content: space-between; margin-top: 0.5rem; }
     .grouped-product-totals { grid-template-columns: repeat(2, 1fr); }
-    .pv-card-main { flex-direction: column; }
-    .pv-card-img { width: 100%; height: 200px; }
+    .pv-grid-2col { grid-template-columns: 1fr; }
+    .pv-summary-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
 

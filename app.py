@@ -465,12 +465,12 @@ def get_pv_ranking(brand=None, limit=50):
             product = row.to_dict()
             # このproduct_class_idに属するSKUを取得
             skus = filtered[filtered['product_class_id'] == row['product_class_id']].copy()
-            # 各SKUのCVRを計算
+            # 各SKUのCVRを計算（購入÷PV）
             skus['cvr'] = skus.apply(
                 lambda x: (x['purchases'] / x['views'] * 100) if x['views'] > 0 else 0, axis=1
             )
             skus = skus.sort_values('views', ascending=False)
-            product['skus'] = skus[['color_name', 'color_tag', 'size', 'views', 'purchases', 'cvr', 'total_stock']].to_dict('records')
+            product['skus'] = skus[['color_name', 'color_tag', 'size', 'views', 'add_to_cart', 'purchases', 'cvr', 'total_stock']].to_dict('records')
             result.append(product)
         
         return result
