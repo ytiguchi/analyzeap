@@ -409,8 +409,8 @@ def get_opportunity_products(brand=None, limit=50):
     return filtered.to_dict('records')
 
 
-def get_top_performers(brand=None, limit=20):
-    """売上上位商品を取得"""
+def get_top_performers(brand=None, limit=30):
+    """売上上位商品を取得（カラー/サイズ別）"""
     df = data_store['merged_data']
     if df is None:
         return []
