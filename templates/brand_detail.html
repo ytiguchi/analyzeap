@@ -64,6 +64,7 @@
             </div>
         </div>
     </div>
+
 </section>
 
 <!-- タブ切り替え -->
@@ -77,6 +78,14 @@
         </button>
         <button class="tab" data-tab="opportunity" onclick="switchTab('opportunity')">
             💡 機会損失 ({{ opportunity_products|length }})
+        </button>
+        {% if anomalies and (anomalies.rising|length > 0 or anomalies.warning|length > 0) %}
+        <button class="tab anomaly-tab" data-tab="anomaly" onclick="switchTab('anomaly')">
+            📈 前日比 ({{ anomalies.rising|length + anomalies.warning|length }})
+        </button>
+        {% endif %}
+        <button class="tab" data-tab="channel" onclick="switchTab('channel')">
+            📡 チャネル{% if channel_data %} ({{ channel_data|length }}){% endif %}
         </button>
     </div>
 
@@ -348,6 +357,183 @@
                 <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
                 <p style="color: var(--text-secondary);">データがありません</p>
             </div>
+        {% endif %}
+    </div>
+
+    <!-- 前日比（異常値検出） -->
+    <div id="tab-anomaly" class="tab-content" style="display: none;">
+        {% if anomalies and (anomalies.rising|length > 0 or anomalies.warning|length > 0) %}
+        <div class="anomaly-tab-content">
+            <div class="anomaly-grid-2col">
+                <!-- 急上昇 -->
+                {% if anomalies.rising|length > 0 %}
+                <div class="anomaly-card-tab rising">
+                    <div class="anomaly-card-header">
+                        <span class="anomaly-card-icon">🔥</span>
+                        <h3 class="anomaly-card-title">急上昇</h3>
+                        <span class="anomaly-card-badge">{{ anomalies.rising|length }}件</span>
+                    </div>
+                    <div class="anomaly-card-list">
+                        {% for item in anomalies.rising[:10] %}
+                        <a href="{{ item.product_url or '#' }}" target="_blank" class="anomaly-list-item">
+                            <img src="{{ item.image_url or 'https://via.placeholder.com/56x56' }}" class="anomaly-list-img" onerror="this.src='https://via.placeholder.com/56x56'">
+                            <div class="anomaly-list-info">
+                                <div class="anomaly-list-name">{{ item.product_name[:20] }}{% if item.product_name|length > 20 %}...{% endif %}</div>
+                                <div class="anomaly-list-variant">{{ item.color_name }} / {{ item.size or 'F' }}</div>
+                            </div>
+                            <div class="anomaly-list-metrics">
+                                <div class="metric-row">
+                                    <span class="metric-val">{{ "{:,}".format(item.views|int) }}</span>
+                                    <span class="metric-lbl">PV</span>
+                                    <span class="metric-delta up">+{{ "%.0f"|format(item.delta_views_pct) }}%</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="metric-val">¥{{ "{:,.0f}".format(item.revenue|int) }}</span>
+                                    <span class="metric-lbl">売上</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="metric-val">{{ item.purchases|int }}</span>
+                                    <span class="metric-lbl">購入</span>
+                                    {% if item.delta_purchases_pct > 0 %}<span class="metric-delta up">+{{ "%.0f"|format(item.delta_purchases_pct) }}%</span>{% endif %}
+                                </div>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- 要チェック -->
+                {% if anomalies.warning|length > 0 %}
+                <div class="anomaly-card-tab warning">
+                    <div class="anomaly-card-header">
+                        <span class="anomaly-card-icon">⚠️</span>
+                        <h3 class="anomaly-card-title">要チェック</h3>
+                        <span class="anomaly-card-badge">{{ anomalies.warning|length }}件</span>
+                    </div>
+                    <div class="anomaly-card-list">
+                        {% for item in anomalies.warning[:10] %}
+                        <a href="{{ item.product_url or '#' }}" target="_blank" class="anomaly-list-item warning">
+                            <img src="{{ item.image_url or 'https://via.placeholder.com/56x56' }}" class="anomaly-list-img" onerror="this.src='https://via.placeholder.com/56x56'">
+                            <div class="anomaly-list-info">
+                                <div class="anomaly-list-name">{{ item.product_name[:20] }}{% if item.product_name|length > 20 %}...{% endif %}</div>
+                                <div class="anomaly-list-variant">{{ item.color_name }} / 在庫 <strong>{{ item.total_stock|int }}</strong></div>
+                            </div>
+                            <div class="anomaly-list-metrics">
+                                <div class="metric-row">
+                                    <span class="metric-val">{{ "{:,}".format(item.views|int) }}</span>
+                                    <span class="metric-lbl">PV</span>
+                                    <span class="metric-delta down">{{ "%.0f"|format(item.delta_views_pct) }}%</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="metric-val">¥{{ "{:,.0f}".format(item.revenue|int) }}</span>
+                                    <span class="metric-lbl">売上</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="metric-val">{{ item.purchases|int }}</span>
+                                    <span class="metric-lbl">購入</span>
+                                </div>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="card" style="text-align: center; padding: 3rem;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
+            <p style="color: var(--text-secondary);">前日比データを取得するには<br>「データ更新」で比較期間を選んでください</p>
+            <a href="/upload" class="btn btn-primary" style="margin-top: 1rem;">データ更新へ</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- チャネル別分析 -->
+    <div id="tab-channel" class="tab-content" style="display: none;">
+        {% if channel_data and channel_data|length > 0 %}
+        <div class="channel-intro">
+            <p>📊 流入元ごとの売上・セッション・購入数を分析。前期間との比較も表示しています。</p>
+        </div>
+        <div class="channel-list">
+            {% for ch in channel_data %}
+            <div class="channel-row animate-in" style="animation-delay: {{ loop.index * 0.03 }}s;">
+                <div class="channel-main">
+                    <div class="channel-name-block">
+                        <span class="channel-name-ja">{{ ch.channel_ja }}</span>
+                    </div>
+                    
+                    <div class="channel-kpi-row">
+                        <!-- 売上 -->
+                        <div class="channel-kpi main-kpi">
+                            <span class="kpi-num">¥{{ "{:,.0f}".format(ch.revenue or 0) }}</span>
+                            <span class="kpi-lbl">売上</span>
+                            {% if ch.delta_revenue_pct != 0 %}
+                            <span class="kpi-delta {% if ch.delta_revenue_pct > 0 %}up{% else %}down{% endif %}">
+                                {% if ch.delta_revenue_pct > 0 %}↑{% else %}↓{% endif %}{{ "{:,.0f}".format(ch.delta_revenue|abs) }}
+                                <span class="delta-pct">({{ "{:+.0f}".format(ch.delta_revenue_pct) }}%)</span>
+                            </span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- セッション -->
+                        <div class="channel-kpi">
+                            <span class="kpi-num">{{ "{:,}".format(ch.sessions or 0) }}</span>
+                            <span class="kpi-lbl">セッション</span>
+                            {% if ch.delta_sessions_pct != 0 %}
+                            <span class="kpi-delta-mini {% if ch.delta_sessions_pct > 0 %}up{% else %}down{% endif %}">
+                                {{ "{:+.0f}".format(ch.delta_sessions_pct) }}%
+                            </span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- 購入 -->
+                        <div class="channel-kpi">
+                            <span class="kpi-num">{{ ch.purchases or 0 }}</span>
+                            <span class="kpi-lbl">購入</span>
+                            {% if ch.delta_purchases_pct != 0 %}
+                            <span class="kpi-delta-mini {% if ch.delta_purchases_pct > 0 %}up{% else %}down{% endif %}">
+                                {{ "{:+.0f}".format(ch.delta_purchases_pct) }}%
+                            </span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- CVR -->
+                        <div class="channel-kpi">
+                            <span class="kpi-num {% if (ch.cvr or 0) >= 1 %}highlight{% endif %}">{{ "%.2f"|format(ch.cvr or 0) }}%</span>
+                            <span class="kpi-lbl">CVR</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 詳細ソース（ドリルダウン） -->
+                {% if ch.sources and ch.sources|length > 0 %}
+                <div class="channel-sources">
+                    <div class="sources-header">詳細ソース</div>
+                    <div class="sources-list">
+                        {% for src in ch.sources %}
+                        <div class="source-item">
+                            <span class="source-name">{{ src.name }}</span>
+                            <span class="source-stats">
+                                <span class="source-sessions">{{ "{:,}".format(src.sessions) }} セッション</span>
+                                <span class="source-revenue">¥{{ "{:,.0f}".format(src.revenue) }}</span>
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card" style="text-align: center; padding: 3rem;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">📡</div>
+            <p style="color: var(--text-secondary);">チャネルデータがありません</p>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">「データ更新」でGA4データを取得するとチャネル情報も表示されます</p>
+            <a href="/upload" class="btn btn-primary" style="margin-top: 1rem;">データ更新へ</a>
+        </div>
         {% endif %}
     </div>
 </section>
@@ -1149,6 +1335,371 @@
     .grouped-product-totals { grid-template-columns: repeat(2, 1fr); }
     .pv-grid-2col { grid-template-columns: 1fr; }
     .pv-summary-grid { grid-template-columns: repeat(2, 1fr); }
+    .anomaly-row { flex-direction: column; }
+}
+
+/* 異常値タブ内デザイン */
+.anomaly-tab .tab {
+    background: linear-gradient(135deg, rgba(255, 140, 66, 0.2) 0%, rgba(255, 193, 7, 0.2) 100%);
+}
+
+.anomaly-tab-content {
+    padding: 1rem 0;
+}
+
+.anomaly-grid-2col {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+@media (max-width: 900px) {
+    .anomaly-grid-2col {
+        grid-template-columns: 1fr;
+    }
+}
+
+.anomaly-card-tab {
+    background: var(--bg-card);
+    border-radius: 20px;
+    padding: 1.5rem;
+    border: 2px solid var(--border-color);
+}
+
+.anomaly-card-tab.rising {
+    border-color: rgba(255, 140, 66, 0.4);
+    background: linear-gradient(135deg, rgba(255, 140, 66, 0.08) 0%, var(--bg-card) 100%);
+}
+
+.anomaly-card-tab.warning {
+    border-color: rgba(255, 193, 7, 0.4);
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.08) 0%, var(--bg-card) 100%);
+}
+
+.anomaly-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.anomaly-card-icon {
+    font-size: 1.5rem;
+}
+
+.anomaly-card-title {
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.anomaly-card-badge {
+    margin-left: auto;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+}
+
+.anomaly-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.anomaly-list-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem;
+    background: var(--bg-secondary);
+    border-radius: 14px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.anomaly-list-item:hover {
+    transform: translateX(6px);
+    box-shadow: var(--shadow-sm);
+    background: rgba(255,255,255,0.9);
+    border-color: var(--border-color);
+}
+
+.anomaly-list-img {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.anomaly-list-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.anomaly-list-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.anomaly-list-variant {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.anomaly-list-variant strong {
+    color: var(--accent-coral);
+}
+
+.anomaly-list-metrics {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+}
+
+.metric-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.metric-val {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+}
+
+.metric-lbl {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    min-width: 24px;
+}
+
+.metric-delta {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 6px;
+}
+
+.metric-delta.up {
+    color: #FF6B35;
+    background: rgba(255, 107, 53, 0.15);
+}
+
+.metric-delta.down {
+    color: #F44336;
+    background: rgba(244, 67, 54, 0.15);
+}
+
+/* チャネル別分析（改良版） */
+.channel-intro {
+    background: linear-gradient(135deg, rgba(232, 164, 164, 0.1) 0%, rgba(200, 162, 200, 0.1) 100%);
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+}
+
+.channel-intro p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.channel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.channel-row {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 1.25rem;
+    border: 2px solid var(--border-color);
+    transition: all 0.2s ease;
+}
+
+.channel-row:hover {
+    border-color: var(--accent-lavender);
+    box-shadow: var(--shadow-hover);
+}
+
+.channel-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.channel-name-block {
+    min-width: 220px;
+}
+
+.channel-name-ja {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.channel-kpi-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    flex: 1;
+}
+
+.channel-kpi {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+}
+
+.channel-kpi.main-kpi {
+    min-width: 150px;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, rgba(232, 164, 164, 0.15) 0%, rgba(200, 162, 200, 0.15) 100%);
+    border-radius: 12px;
+}
+
+.channel-kpi .kpi-num {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+}
+
+.channel-kpi.main-kpi .kpi-num {
+    font-size: 1.5rem;
+    color: var(--accent-coral);
+}
+
+.channel-kpi .kpi-num.highlight {
+    color: var(--accent-mint);
+}
+
+.channel-kpi .kpi-lbl {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-top: 0.2rem;
+}
+
+.channel-kpi .kpi-delta {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-top: 0.3rem;
+}
+
+.channel-kpi .kpi-delta.up {
+    color: #4CAF50;
+}
+
+.channel-kpi .kpi-delta.down {
+    color: #F44336;
+}
+
+.channel-kpi .kpi-delta .delta-pct {
+    font-size: 0.7rem;
+    opacity: 0.8;
+}
+
+.channel-kpi .kpi-delta-mini {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    margin-top: 0.2rem;
+}
+
+.channel-kpi .kpi-delta-mini.up {
+    color: #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.channel-kpi .kpi-delta-mini.down {
+    color: #F44336;
+    background: rgba(244, 67, 54, 0.1);
+}
+
+/* 詳細ソース（ドリルダウン） */
+.channel-sources {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--border-color);
+}
+
+.sources-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+}
+
+.sources-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.source-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-secondary);
+    padding: 0.4rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+}
+
+.source-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.source-stats {
+    display: flex;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.source-sessions {
+    color: var(--text-muted);
+}
+
+.source-revenue {
+    color: var(--accent-coral);
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .channel-main {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .channel-kpi-row {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .channel-name-block {
+        min-width: auto;
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
 }
 </style>
 

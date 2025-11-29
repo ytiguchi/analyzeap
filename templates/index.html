@@ -144,6 +144,8 @@
         </div>
     </section>
 
+    {# 異常値検出はブランド詳細ページに移動したのでダッシュボードからは削除 #}
+
     {# クイックアクションは不要なので削除
     <!-- クイックアクション -->
     <section class="section" style="display: none;">
@@ -772,6 +774,195 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
     opacity: 0.8;
+}
+
+/* 異常値検出セクション */
+.anomaly-section .section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.section-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+}
+
+.anomaly-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+@media (max-width: 900px) {
+    .anomaly-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.anomaly-card {
+    background: var(--bg-card);
+    border-radius: 20px;
+    padding: 1.5rem;
+    border: 2px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.anomaly-card.rising {
+    border-color: rgba(255, 140, 66, 0.3);
+    background: linear-gradient(135deg, rgba(255, 140, 66, 0.05) 0%, var(--bg-card) 100%);
+}
+
+.anomaly-card.warning {
+    border-color: rgba(255, 193, 7, 0.3);
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.05) 0%, var(--bg-card) 100%);
+}
+
+.anomaly-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.anomaly-icon {
+    font-size: 1.5rem;
+}
+
+.anomaly-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.anomaly-count {
+    margin-left: auto;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+}
+
+.anomaly-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: 0 0 1rem 0;
+}
+
+.anomaly-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.anomaly-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.anomaly-item:hover {
+    transform: translateX(4px);
+    box-shadow: var(--shadow-sm);
+}
+
+.anomaly-img-link {
+    flex-shrink: 0;
+}
+
+.anomaly-img {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.anomaly-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.anomaly-brand {
+    font-size: 0.65rem;
+    color: var(--accent-lavender);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.anomaly-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.anomaly-color {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.anomaly-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    text-align: right;
+}
+
+.stat-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    justify-content: flex-end;
+}
+
+.stat-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+}
+
+.stat-value {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+}
+
+.stat-delta {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.1rem 0.4rem;
+    border-radius: 6px;
+}
+
+.stat-delta.up {
+    color: #FF6B35;
+    background: rgba(255, 107, 53, 0.15);
+}
+
+.stat-delta.down {
+    color: #F44336;
+    background: rgba(244, 67, 54, 0.15);
+}
+
+.anomaly-more {
+    text-align: center;
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--accent-lavender);
+    font-weight: 600;
 }
 </style>
 

@@ -67,6 +67,7 @@ data_store = {
     'product_master_info': None,  # R2からの情報
     'ga_sales': {},  # ブランド別に保存 {'rady': {'data': df, 'period': {...}}, ...}
     'ga_sales_previous': {},  # 前期間データ（比較用）
+    'channel_data': {},  # チャネル別データ {'rady': df, ...}
     'merged_data': None,
     'merged_data_previous': None  # 前期間のマージデータ
 }
@@ -505,6 +506,201 @@ def get_top_performers(brand=None, limit=30):
     return filtered.to_dict('records')
 
 
+def get_anomalies(brand=None, limit=20):
+    """
+    異常値検出：急上昇商品と要注意商品を取得
+    - 急上昇: PVまたは購入が前期比+50%以上かつ一定以上の実績
+    - 要注意: 在庫あるのにPVまたは購入が前期比-30%以上
+    """
+    df = data_store['merged_data']
+    if df is None:
+        return {'rising': [], 'warning': []}
+    
+    # デルタデータがなければ空を返す
+    if 'delta_views_pct' not in df.columns:
+        return {'rising': [], 'warning': []}
+    
+    filtered = df.copy()
+    if brand and brand != 'all':
+        filtered = filtered[filtered['brand'] == brand]
+    
+    # 🔥 急上昇商品
+    # 条件: (PV+50%以上 AND 今期PV>=50) OR (購入+50%以上 AND 今期購入>=3)
+    rising_condition = (
+        ((filtered['delta_views_pct'] >= 50) & (filtered['views'] >= 50)) |
+        ((filtered['delta_purchases_pct'] >= 50) & (filtered['purchases'] >= 3))
+    )
+    rising = filtered[rising_condition].copy()
+    
+    # スコア計算（上昇率の高い順）
+    rising['rise_score'] = (
+        rising['delta_views_pct'].fillna(0) * 0.3 +
+        rising['delta_purchases_pct'].fillna(0) * 0.5 +
+        rising['delta_revenue_pct'].fillna(0) * 0.2
+    )
+    rising = rising.sort_values('rise_score', ascending=False).head(limit)
+    
+    # ⚠️ 要注意商品（在庫あるのに落ちている）
+    # 条件: 在庫>0 AND ((PV-30%以上 AND 前期PV>=30) OR (購入-30%以上 AND 前期購入>=2))
+    warning_condition = (
+        (filtered['total_stock'] > 0) &
+        (
+            ((filtered['delta_views_pct'] <= -30) & (filtered['prev_views'] >= 30)) |
+            ((filtered['delta_purchases_pct'] <= -30) & (filtered['prev_purchases'] >= 2))
+        )
+    )
+    warning = filtered[warning_condition].copy()
+    
+    # スコア計算（下落率の大きい順、マイナスなので小さい方が悪い）
+    warning['warn_score'] = (
+        warning['delta_views_pct'].fillna(0) * 0.3 +
+        warning['delta_purchases_pct'].fillna(0) * 0.5 +
+        warning['delta_revenue_pct'].fillna(0) * 0.2
+    )
+    warning = warning.sort_values('warn_score', ascending=True).head(limit)
+    
+    # 必要なカラムだけ抽出して辞書に変換
+    cols = ['sku_id', 'brand', 'product_name', 'color_name', 'size', 'image_url', 'product_url',
+            'total_stock', 'views', 'prev_views', 'delta_views', 'delta_views_pct',
+            'purchases', 'prev_purchases', 'delta_purchases', 'delta_purchases_pct',
+            'revenue', 'prev_revenue', 'delta_revenue', 'delta_revenue_pct', 'cvr']
+    
+    def safe_to_dict(dataframe):
+        result = []
+        for _, row in dataframe.iterrows():
+            item = {}
+            for col in cols:
+                if col in row.index:
+                    val = row[col]
+                    if pd.isna(val):
+                        val = 0 if col not in ['sku_id', 'brand', 'product_name', 'color_name', 'size', 'image_url', 'product_url'] else ''
+                    item[col] = val
+                else:
+                    item[col] = 0 if col not in ['sku_id', 'brand', 'product_name', 'color_name', 'size', 'image_url', 'product_url'] else ''
+            result.append(item)
+        return result
+    
+    return {
+        'rising': safe_to_dict(rising),
+        'warning': safe_to_dict(warning)
+    }
+
+
+def process_channel_data(channel_info):
+    """
+    チャネルデータを整形（日本語化、比較データ付き）
+    """
+    from ga4_api import translate_channel_name, translate_source_name
+    
+    if not channel_info or 'current' not in channel_info:
+        return []
+    
+    current_df = channel_info['current']
+    prev_df = channel_info.get('previous')
+    
+    if current_df is None or len(current_df) == 0:
+        return []
+    
+    # チャネルグループでまず集計
+    channel_summary = current_df.groupby('channel').agg({
+        'sessions': 'sum',
+        'users': 'sum',
+        'purchases': 'sum',
+        'revenue': 'sum',
+    }).reset_index()
+    
+    # 前期間データがあれば比較用に集計
+    prev_summary = None
+    if prev_df is not None and len(prev_df) > 0:
+        prev_summary = prev_df.groupby('channel').agg({
+            'sessions': 'sum',
+            'users': 'sum',
+            'purchases': 'sum',
+            'revenue': 'sum',
+        }).reset_index()
+        prev_summary = prev_summary.set_index('channel')
+    
+    # 詳細ソースを取得（チャネルごと）
+    source_details = {}
+    for channel in current_df['channel'].unique():
+        sources = current_df[current_df['channel'] == channel].groupby('source').agg({
+            'sessions': 'sum',
+            'users': 'sum',
+            'purchases': 'sum',
+            'revenue': 'sum',
+        }).reset_index()
+        sources = sources.sort_values('revenue', ascending=False).head(5)
+        source_details[channel] = sources.to_dict('records')
+    
+    # 結果を整形
+    results = []
+    for _, row in channel_summary.iterrows():
+        channel = row['channel']
+        item = {
+            'channel': channel,
+            'channel_ja': translate_channel_name(channel),
+            'sessions': int(row['sessions']),
+            'users': int(row['users']),
+            'purchases': int(row['purchases']),
+            'revenue': float(row['revenue']),
+            'cvr': round((row['purchases'] / row['sessions'] * 100) if row['sessions'] > 0 else 0, 2),
+        }
+        
+        # 前期間との比較
+        if prev_summary is not None and channel in prev_summary.index:
+            prev = prev_summary.loc[channel]
+            item['prev_sessions'] = int(prev['sessions'])
+            item['prev_users'] = int(prev['users'])
+            item['prev_purchases'] = int(prev['purchases'])
+            item['prev_revenue'] = float(prev['revenue'])
+            
+            # デルタ計算
+            item['delta_sessions'] = item['sessions'] - item['prev_sessions']
+            item['delta_revenue'] = item['revenue'] - item['prev_revenue']
+            item['delta_purchases'] = item['purchases'] - item['prev_purchases']
+            
+            # パーセント変化
+            if item['prev_sessions'] > 0:
+                item['delta_sessions_pct'] = round((item['sessions'] - item['prev_sessions']) / item['prev_sessions'] * 100, 1)
+            else:
+                item['delta_sessions_pct'] = 100 if item['sessions'] > 0 else 0
+            if item['prev_revenue'] > 0:
+                item['delta_revenue_pct'] = round((item['revenue'] - item['prev_revenue']) / item['prev_revenue'] * 100, 1)
+            else:
+                item['delta_revenue_pct'] = 100 if item['revenue'] > 0 else 0
+            if item['prev_purchases'] > 0:
+                item['delta_purchases_pct'] = round((item['purchases'] - item['prev_purchases']) / item['prev_purchases'] * 100, 1)
+            else:
+                item['delta_purchases_pct'] = 100 if item['purchases'] > 0 else 0
+        else:
+            item['prev_sessions'] = 0
+            item['prev_revenue'] = 0
+            item['prev_purchases'] = 0
+            item['delta_sessions'] = item['sessions']
+            item['delta_revenue'] = item['revenue']
+            item['delta_purchases'] = item['purchases']
+            item['delta_sessions_pct'] = 0
+            item['delta_revenue_pct'] = 0
+            item['delta_purchases_pct'] = 0
+        
+        # 詳細ソース（日本語化）
+        item['sources'] = []
+        if channel in source_details:
+            for src in source_details[channel]:
+                item['sources'].append({
+                    'name': translate_source_name(src['source']),
+                    'sessions': int(src['sessions']),
+                    'purchases': int(src['purchases']),
+                    'revenue': float(src['revenue']),
+                })
+        
+        results.append(item)
+    
+    # 売上順でソート
+    results.sort(key=lambda x: x['revenue'], reverse=True)
+    return results
+
+
 def get_pv_ranking(brand=None, limit=50):
     """PV（閲覧数）ランキングを取得（商品名でグループ化、SKU詳細付き）"""
     df = data_store['merged_data']
@@ -697,6 +893,7 @@ def index():
     summary = None
     pv_ranking = []
     analysis_period = None
+    anomalies = {'rising': [], 'warning': []}
     
     if has_data:
         brands = data_store['merged_data']['brand'].dropna().unique().tolist()
@@ -845,7 +1042,7 @@ def fetch_ga4():
                 save_ga4_data(brand, result['data'], start_str, end_str)
         
         # 前期間データも取得（比較用）
-        from ga4_api import fetch_day_before_yesterday_data, fetch_previous_3days_data, fetch_previous_weekly_data
+        from ga4_api import fetch_day_before_yesterday_data, fetch_previous_3days_data, fetch_previous_weekly_data, fetch_all_brands_channel_data
         
         for brand in results.keys():
             prev_result = None
@@ -860,6 +1057,15 @@ def fetch_ga4():
                 data_store['ga_sales_previous'][brand] = prev_result
                 prev_period = prev_result['period']
                 print(f"✅ Fetched previous period data for {brand}: {len(prev_result['data'])} items ({prev_period['start_date'].strftime('%m/%d')}〜{prev_period['end_date'].strftime('%m/%d')})")
+        
+        # チャネルデータも取得
+        try:
+            channel_results = fetch_all_brands_channel_data(period_type)
+            for brand, channel_df in channel_results.items():
+                data_store['channel_data'][brand] = channel_df
+                print(f"✅ Fetched channel data for {brand}: {len(channel_df)} channels")
+        except Exception as e:
+            print(f"⚠️ Failed to fetch channel data: {e}")
         
         # 商品マスタがあれば分析実行
         if data_store['product_master'] is not None:
@@ -886,6 +1092,15 @@ def brand_detail(brand_name):
     opportunity_products = get_opportunity_products(brand)
     top_products = get_top_performers(brand)
     pv_ranking = get_pv_ranking(brand, limit=50)
+    anomalies = get_anomalies(brand=brand, limit=10)
+    
+    # チャネルデータ取得（整形済み）
+    channel_data = []
+    brand_key = brand.lower() if brand else None
+    if brand_key and brand_key in data_store.get('channel_data', {}):
+        channel_info = data_store['channel_data'][brand_key]
+        if channel_info:
+            channel_data = process_channel_data(channel_info)
     
     # ブランド統計
     df = data_store['merged_data']
@@ -914,6 +1129,8 @@ def brand_detail(brand_name):
                          opportunity_products=opportunity_products,
                          top_products=top_products,
                          pv_ranking=pv_ranking,
+                         anomalies=anomalies,
+                         channel_data=channel_data,
                          brands=brands,
                          analysis_period=analysis_period)
 

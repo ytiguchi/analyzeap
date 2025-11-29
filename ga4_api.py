@@ -309,3 +309,154 @@ def fetch_all_brands_data(period_type: str = 'weekly') -> dict:
             results[brand] = result
     
     return results
+
+
+def fetch_channel_data(brand: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    チャネル別のトラフィック・売上データを取得（詳細ソース含む）
+    """
+    client = get_ga4_client()
+    if client is None:
+        return None
+    
+    config = get_ga4_config()
+    property_id = config['properties'].get(brand, '')
+    
+    if not property_id:
+        print(f"❌ GA4 property ID not set for brand: {brand}")
+        return None
+    
+    try:
+        # チャネルグループ + 詳細ソースを取得
+        request = RunReportRequest(
+            property=f"properties/{property_id}",
+            dimensions=[
+                Dimension(name="sessionDefaultChannelGroup"),
+                Dimension(name="sessionSource"),
+            ],
+            metrics=[
+                Metric(name="sessions"),
+                Metric(name="activeUsers"),
+                Metric(name="ecommercePurchases"),
+                Metric(name="purchaseRevenue"),
+            ],
+            date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
+        )
+        
+        response = client.run_report(request)
+        
+        rows = []
+        for row in response.rows:
+            rows.append({
+                'channel': row.dimension_values[0].value,
+                'source': row.dimension_values[1].value,
+                'sessions': int(row.metric_values[0].value),
+                'users': int(row.metric_values[1].value),
+                'purchases': int(row.metric_values[2].value),
+                'revenue': float(row.metric_values[3].value),
+            })
+        
+        df = pd.DataFrame(rows)
+        print(f"✅ Fetched channel data for {brand}: {len(df)} sources")
+        return df
+    
+    except Exception as e:
+        print(f"❌ Error fetching channel data for {brand}: {e}")
+        return None
+
+
+# チャネル名の日本語マッピング
+CHANNEL_NAME_MAP = {
+    'Organic Search': '🔍 自然検索（Google等）',
+    'Direct': '🔗 ダイレクト（直接アクセス）',
+    'Organic Social': '📱 SNS（自然流入）',
+    'Paid Social': '💰 SNS広告',
+    'Referral': '🔀 参照サイト',
+    'Email': '📧 メール',
+    'Paid Search': '💎 検索広告（リスティング）',
+    'Display': '🖼️ ディスプレイ広告',
+    'Affiliates': '🤝 アフィリエイト',
+    'Unassigned': '❓ 未分類',
+    'Cross-network': '🌐 クロスネットワーク',
+    'Video': '🎬 動画広告',
+    'Audio': '🎵 音声広告',
+    'SMS': '💬 SMS',
+    'Mobile Push Notifications': '📲 プッシュ通知',
+}
+
+# 詳細ソースの日本語マッピング
+SOURCE_NAME_MAP = {
+    'google': 'Google',
+    'instagram': 'Instagram',
+    'facebook': 'Facebook',
+    'twitter': 'Twitter/X',
+    't.co': 'Twitter/X',
+    'tiktok': 'TikTok',
+    'youtube': 'YouTube',
+    'yahoo': 'Yahoo!',
+    'bing': 'Bing',
+    'line': 'LINE',
+    'pinterest': 'Pinterest',
+    'note': 'note',
+    '(direct)': '直接アクセス',
+}
+
+
+def translate_channel_name(channel: str) -> str:
+    """チャネル名を日本語に変換"""
+    return CHANNEL_NAME_MAP.get(channel, f'📡 {channel}')
+
+
+def translate_source_name(source: str) -> str:
+    """ソース名をわかりやすく変換"""
+    source_lower = source.lower()
+    for key, name in SOURCE_NAME_MAP.items():
+        if key in source_lower:
+            return name
+    return source
+
+
+def fetch_all_brands_channel_data(period_type: str = 'weekly') -> dict:
+    """全ブランドのチャネルデータを取得（前期間も含む）"""
+    config = get_ga4_config()
+    results = {}
+    
+    # 期間計算
+    if period_type == 'yesterday':
+        start_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        end_date = start_date
+        prev_start = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
+        prev_end = prev_start
+    elif period_type == '3days':
+        start_date = (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d')
+        end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        prev_start = (datetime.now() - timedelta(days=6)).strftime('%Y-%m-%d')
+        prev_end = (datetime.now() - timedelta(days=4)).strftime('%Y-%m-%d')
+    else:  # weekly
+        start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+        end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        prev_start = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%d')
+        prev_end = (datetime.now() - timedelta(days=8)).strftime('%Y-%m-%d')
+    
+    for brand, prop_id in config['properties'].items():
+        if not prop_id:
+            continue
+        
+        # 現在期間
+        df = fetch_channel_data(brand, start_date, end_date)
+        # 前期間
+        prev_df = fetch_channel_data(brand, prev_start, prev_end)
+        
+        if df is not None:
+            results[brand] = {
+                'current': df,
+                'previous': prev_df,
+                'period': {
+                    'start': start_date,
+                    'end': end_date,
+                    'prev_start': prev_start,
+                    'prev_end': prev_end
+                }
+            }
+    
+    return results
