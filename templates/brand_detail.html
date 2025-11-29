@@ -125,21 +125,28 @@
                         </div>
                         
                         <!-- SKU別詳細 -->
-                        {% if p.skus %}
+                        {% if p.skus and p.skus|length > 0 %}
                         <div class="sku-list">
-                            {% for sku in p.skus[:6] %}
+                            <div class="sku-header">カラー/サイズ別</div>
+                            {% for sku in p.skus[:8] %}
                             <div class="sku-row">
                                 <span class="sku-color-dot" style="background: {{ sku.color_tag or '#888' }};"></span>
                                 <span class="sku-name">{{ sku.color_name or '-' }} / {{ sku.size or '-' }}</span>
                                 <span class="sku-metrics">
-                                    <span class="sku-pv-val">{{ sku.views|int }}</span>
+                                    <span class="sku-pv-val">PV {{ sku.views|int }}</span>
                                     <span class="sku-cvr-val {% if (sku.cvr or 0) >= 1 %}high{% endif %}">{{ "%.1f"|format(sku.cvr or 0) }}%</span>
                                 </span>
                             </div>
                             {% endfor %}
-                            {% if p.skus|length > 6 %}
-                            <div class="sku-row more">+{{ p.skus|length - 6 }}件</div>
+                            {% if p.skus|length > 8 %}
+                            <div class="sku-row more">+{{ p.skus|length - 8 }}件のバリエーション</div>
                             {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="sku-list">
+                            <div class="sku-row" style="justify-content: center; color: var(--text-muted);">
+                                SKU詳細なし
+                            </div>
                         </div>
                         {% endif %}
                     </div>
@@ -850,6 +857,15 @@
 .sku-list {
     border-top: 1px solid var(--border-color);
     padding-top: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.sku-header {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
 }
 
 .sku-row {
