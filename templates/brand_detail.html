@@ -6,9 +6,6 @@
 <section class="section">
     <!-- ブランド選択タブ -->
     <div class="brand-tabs animate-in" style="margin-bottom: 2rem;">
-        <a href="/brand/all" class="brand-tab {% if brand_name == 'all' %}active{% endif %}">
-            🌐 全ブランド
-        </a>
         {% for b in brands %}
         <a href="/brand/{{ b }}" class="brand-tab {% if brand_name == b %}active{% endif %}">
             {% if b == 'Rady' or b == 'rady' %}👗{% elif b == 'cherimi' %}🌸{% elif b == 'michellMacaron' %}🎀{% elif b == 'SOLNI' or b == 'solni' %}💎{% else %}🏷️{% endif %}
