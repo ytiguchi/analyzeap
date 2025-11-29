@@ -52,6 +52,11 @@
                     🔄 データを取得して比較
                 </button>
             </form>
+            
+            <div class="api-warning">
+                <span class="warning-icon">🐰</span>
+                <span class="warning-text">連打しないでね！API費用がかかっちゃうよ〜</span>
+            </div>
         </div>
     </div>
     {% endif %}
@@ -198,6 +203,28 @@ details[open] > summary::before {
     font-size: 0.7rem;
     color: var(--text-muted);
     text-align: center;
+}
+
+/* API警告メッセージ */
+.api-warning {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding: 0.6rem 1rem;
+    background: linear-gradient(135deg, rgba(255, 182, 193, 0.2) 0%, rgba(255, 218, 185, 0.2) 100%);
+    border-radius: 20px;
+    font-size: 0.8rem;
+}
+
+.warning-icon {
+    font-size: 1.1rem;
+}
+
+.warning-text {
+    color: var(--text-secondary);
+    font-weight: 500;
 }
 </style>
 
