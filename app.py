@@ -66,7 +66,9 @@ data_store = {
     'product_master': None,
     'product_master_info': None,  # R2からの情報
     'ga_sales': {},  # ブランド別に保存 {'rady': {'data': df, 'period': {...}}, ...}
-    'merged_data': None
+    'ga_sales_previous': {},  # 前期間データ（比較用）
+    'merged_data': None,
+    'merged_data_previous': None  # 前期間のマージデータ
 }
 
 # 登録済みブランド一覧
@@ -345,6 +347,44 @@ def merge_and_analyze():
     # Regalectを除外
     merged = merged[merged['brand'] != 'Regalect']
     
+    # 前期間データとの比較（デルタ計算）
+    ga_prev_dict = data_store.get('ga_sales_previous', {})
+    if ga_prev_dict:
+        ga_prev_list = [info['data'] for info in ga_prev_dict.values() if info and 'data' in info and len(info['data']) > 0]
+        if ga_prev_list:
+            ga_prev = pd.concat(ga_prev_list, ignore_index=True)
+            ga_prev = ga_prev.groupby('sku_id').agg({
+                'views': 'sum',
+                'add_to_cart': 'sum',
+                'purchases': 'sum',
+                'revenue': 'sum',
+            }).reset_index()
+            ga_prev.columns = ['sku_id', 'prev_views', 'prev_add_to_cart', 'prev_purchases', 'prev_revenue']
+            
+            # 前期間データをマージ
+            merged = merged.merge(ga_prev, on='sku_id', how='left')
+            
+            # デルタ計算
+            for col in ['views', 'add_to_cart', 'purchases', 'revenue']:
+                prev_col = f'prev_{col}'
+                delta_col = f'delta_{col}'
+                pct_col = f'delta_{col}_pct'
+                
+                merged[prev_col] = merged[prev_col].fillna(0)
+                merged[delta_col] = merged[col] - merged[prev_col]
+                merged[pct_col] = merged.apply(
+                    lambda x: ((x[col] - x[prev_col]) / x[prev_col] * 100) if x[prev_col] > 0 else (100 if x[col] > 0 else 0),
+                    axis=1
+                )
+            
+            # CVRのデルタ
+            merged['prev_cvr'] = merged.apply(
+                lambda x: (x['prev_purchases'] / x['prev_views'] * 100) if x['prev_views'] > 0 else 0, axis=1
+            )
+            merged['delta_cvr'] = merged['cvr'] - merged['prev_cvr']
+            
+            print(f"✅ Calculated deltas for {len(merged)} items")
+    
     data_store['merged_data'] = merged
     return merged
 
@@ -482,10 +522,10 @@ def get_pv_ranking(brand=None, limit=50):
             # 購入数の多い順にソート（優れている順）
             skus = skus.sort_values('purchases', ascending=False)
             
-            # SKUデータを辞書リストに変換
+            # SKUデータを辞書リストに変換（デルタ情報も含む）
             sku_list = []
             for _, s in skus.iterrows():
-                sku_list.append({
+                sku_data = {
                     'color_name': str(s.get('color_name', '') or ''),
                     'color_tag': str(s.get('color_tag', '#888') or '#888'),
                     'size': str(s.get('size', '') or ''),
@@ -494,7 +534,14 @@ def get_pv_ranking(brand=None, limit=50):
                     'purchases': int(s.get('purchases', 0) or 0),
                     'cvr': float(s.get('cvr', 0) or 0),
                     'total_stock': int(s.get('total_stock', 0) or 0),
-                })
+                    # デルタ情報
+                    'delta_purchases': int(s.get('delta_purchases', 0) or 0),
+                    'delta_purchases_pct': float(s.get('delta_purchases_pct', 0) or 0),
+                    'delta_add_to_cart': int(s.get('delta_add_to_cart', 0) or 0),
+                    'delta_cvr': float(s.get('delta_cvr', 0) or 0),
+                    'prev_purchases': int(s.get('prev_purchases', 0) or 0),
+                }
+                sku_list.append(sku_data)
             product['skus'] = sku_list
         else:
             product['skus'] = []
@@ -727,7 +774,7 @@ def sync_r2():
 @app.route('/fetch-ga4', methods=['POST'])
 @login_required
 def fetch_ga4():
-    """GA4 APIからデータを取得"""
+    """GA4 APIからデータを取得（前期間データも同時取得）"""
     if not is_ga4_configured():
         flash('GA4 APIが設定されていません', 'error')
         return redirect(url_for('upload'))
@@ -735,6 +782,7 @@ def fetch_ga4():
     period_type = request.form.get('period_type', 'yesterday')  # 'yesterday' or 'weekly'
     
     try:
+        # 現在期間のデータを取得
         results = fetch_all_brands_data(period_type)
         
         if not results:
@@ -753,6 +801,16 @@ def fetch_ga4():
                 start_str = period['start_date'].strftime('%Y%m%d')
                 end_str = period['end_date'].strftime('%Y%m%d')
                 save_ga4_data(brand, result['data'], start_str, end_str)
+        
+        # 前期間データも取得（比較用）
+        if period_type == 'yesterday':
+            # 前日データなら前々日も取得
+            from ga4_api import fetch_day_before_yesterday_data
+            for brand in results.keys():
+                prev_result = fetch_day_before_yesterday_data(brand)
+                if prev_result:
+                    data_store['ga_sales_previous'][brand] = prev_result
+                    print(f"✅ Fetched previous day data for {brand}: {len(prev_result['data'])} items")
         
         # 商品マスタがあれば分析実行
         if data_store['product_master'] is not None:

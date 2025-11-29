@@ -148,6 +148,41 @@ def fetch_yesterday_data(brand: str) -> dict:
     return None
 
 
+def fetch_day_before_yesterday_data(brand: str) -> dict:
+    """前々日のデータを取得"""
+    day_before = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
+    df = fetch_ecommerce_data(brand, day_before, day_before)
+    
+    if df is not None:
+        return {
+            'data': df,
+            'period': {
+                'start_date': datetime.strptime(day_before, '%Y-%m-%d'),
+                'end_date': datetime.strptime(day_before, '%Y-%m-%d'),
+                'days': 1,
+                'period_type': 'daily'
+            }
+        }
+    return None
+
+
+def fetch_comparison_data(brand: str) -> dict:
+    """前日と前々日の比較データを取得"""
+    yesterday = fetch_yesterday_data(brand)
+    day_before = fetch_day_before_yesterday_data(brand)
+    
+    if yesterday is None:
+        return None
+    
+    result = {
+        'current': yesterday,
+        'previous': day_before,
+        'has_comparison': day_before is not None
+    }
+    
+    return result
+
+
 def fetch_weekly_data(brand: str) -> dict:
     """過去7日間のデータを取得"""
     end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
