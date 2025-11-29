@@ -23,12 +23,43 @@
         {% endif %}
     </div>
 {% else %}
+    <!-- 期間切り替えタブ -->
+    {% if available_periods %}
+    <div class="period-tabs animate-in">
+        <div class="period-tabs-label">📅 期間:</div>
+        <div class="period-tabs-buttons">
+            <a href="{{ url_for('switch_period', period_type='yesterday') }}" 
+               class="period-tab {% if current_period == 'yesterday' %}active{% endif %} {% if 'yesterday' not in available_periods %}disabled{% endif %}">
+                🕐 前日
+            </a>
+            <a href="{{ url_for('switch_period', period_type='3days') }}" 
+               class="period-tab {% if current_period == '3days' %}active{% endif %} {% if '3days' not in available_periods %}disabled{% endif %}">
+                📅 3日間
+            </a>
+            <a href="{{ url_for('switch_period', period_type='weekly') }}" 
+               class="period-tab {% if current_period == 'weekly' %}active{% endif %} {% if 'weekly' not in available_periods %}disabled{% endif %}">
+                📆 週間
+            </a>
+        </div>
+        {% if is_admin %}
+        <a href="{{ url_for('upload') }}" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.75rem; margin-left: auto;">
+            🔄 手動更新
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- 分析期間バナー -->
     {% if analysis_period %}
-    <div class="period-banner animate-in">
+    <div class="period-banner animate-in" style="animation-delay: 0.05s;">
         <div class="period-banner-icon">📊</div>
         <div class="period-banner-content">
-            <div class="period-banner-title">分析期間</div>
+            <div class="period-banner-title">
+                {% if current_period == 'yesterday' %}前日データ
+                {% elif current_period == '3days' %}3日間データ
+                {% elif current_period == 'weekly' %}週間データ
+                {% else %}分析期間{% endif %}
+            </div>
             <div class="period-banner-dates">
                 {% if analysis_period.min_start and analysis_period.max_end %}
                     {{ analysis_period.min_start.strftime('%Y年%m月%d日') }}
@@ -41,11 +72,6 @@
                 {% endif %}
             </div>
         </div>
-        {% if is_admin %}
-        <a href="{{ url_for('upload') }}" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">
-            🔄 更新
-        </a>
-        {% endif %}
     </div>
     {% endif %}
 
@@ -181,6 +207,65 @@
 
 <style>
 /* 分析期間バナー */
+/* 期間切り替えタブ */
+.period-tabs {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    box-shadow: var(--shadow-soft);
+}
+
+.period-tabs-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.period-tabs-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.period-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.period-tab:hover {
+    background: rgba(232, 164, 164, 0.2);
+    color: var(--text-primary);
+    border-color: var(--accent-pink);
+}
+
+.period-tab.active {
+    background: linear-gradient(135deg, var(--accent-pink) 0%, var(--accent-purple) 100%);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 2px 8px rgba(232, 164, 164, 0.4);
+}
+
+.period-tab.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
 .period-banner {
     display: flex;
     align-items: center;
@@ -558,6 +643,21 @@
 }
 
 @media (max-width: 768px) {
+    .period-tabs {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+    .period-tabs-label {
+        text-align: center;
+    }
+    .period-tabs-buttons {
+        justify-content: center;
+    }
+    .period-tab {
+        padding: 0.4rem 0.7rem;
+        font-size: 0.8rem;
+    }
     .period-banner {
         flex-direction: column;
         align-items: flex-start;

@@ -165,7 +165,14 @@ data_store = {
     'ga_sales_previous': {},  # 前期間データ（比較用）
     'channel_data': {},  # チャネル別データ {'rady': df, ...}
     'merged_data': None,
-    'merged_data_previous': None  # 前期間のマージデータ
+    'merged_data_previous': None,  # 前期間のマージデータ
+    'current_period': 'yesterday',  # 現在表示中の期間
+    # 期間別データ（自動更新用）
+    'periods_data': {
+        'yesterday': {'ga_sales': {}, 'ga_sales_previous': {}, 'channel_data': {}, 'merged_data': None, 'merged_data_previous': None},
+        'weekly': {'ga_sales': {}, 'ga_sales_previous': {}, 'channel_data': {}, 'merged_data': None, 'merged_data_previous': None},
+        '3days': {'ga_sales': {}, 'ga_sales_previous': {}, 'channel_data': {}, 'merged_data': None, 'merged_data_previous': None},
+    }
 }
 
 # 登録済みブランド一覧
@@ -359,6 +366,85 @@ def get_analysis_period():
         overall['total_days'] = 0
     
     return overall
+
+
+def switch_period_data(period_type):
+    """
+    指定した期間のデータをメインストアにコピー
+    """
+    if period_type not in data_store['periods_data']:
+        return False
+    
+    period_data = data_store['periods_data'][period_type]
+    
+    # メインストアにコピー
+    data_store['ga_sales'] = period_data['ga_sales'].copy()
+    data_store['ga_sales_previous'] = period_data['ga_sales_previous'].copy()
+    data_store['channel_data'] = period_data['channel_data'].copy()
+    data_store['merged_data'] = period_data['merged_data']
+    data_store['merged_data_previous'] = period_data['merged_data_previous']
+    data_store['current_period'] = period_type
+    
+    return True
+
+
+def merge_and_analyze_for_period(period_type):
+    """
+    指定した期間のデータで分析を実行し、結果を期間別ストアに保存
+    """
+    if period_type not in data_store['periods_data']:
+        return None
+    
+    period_data = data_store['periods_data'][period_type]
+    pm = data_store['product_master']
+    ga_dict = period_data['ga_sales']
+    ga_dict_prev = period_data['ga_sales_previous']
+    
+    if pm is None or not ga_dict:
+        return None
+    
+    # 現在期間のマージ
+    ga_list = [info['data'] for info in ga_dict.values() if info and 'data' in info and len(info['data']) > 0]
+    if not ga_list:
+        return None
+    
+    ga = pd.concat(ga_list, ignore_index=True)
+    ga = ga.groupby('sku_id').agg({
+        'item_name': 'first',
+        'views': 'sum',
+        'add_to_cart': 'sum',
+        'purchases': 'sum',
+        'revenue': 'sum',
+    }).reset_index()
+    
+    merged = pm.merge(ga, on='sku_id', how='left')
+    merged['views'] = merged['views'].fillna(0).astype(int)
+    merged['add_to_cart'] = merged['add_to_cart'].fillna(0).astype(int)
+    merged['purchases'] = merged['purchases'].fillna(0).astype(int)
+    merged['revenue'] = merged['revenue'].fillna(0)
+    
+    period_data['merged_data'] = merged
+    
+    # 前期間のマージ
+    if ga_dict_prev:
+        ga_list_prev = [info['data'] for info in ga_dict_prev.values() if info and 'data' in info and len(info['data']) > 0]
+        if ga_list_prev:
+            ga_prev = pd.concat(ga_list_prev, ignore_index=True)
+            ga_prev = ga_prev.groupby('sku_id').agg({
+                'item_name': 'first',
+                'views': 'sum',
+                'add_to_cart': 'sum',
+                'purchases': 'sum',
+                'revenue': 'sum',
+            }).reset_index()
+            merged_prev = pm.merge(ga_prev, on='sku_id', how='left')
+            merged_prev['views'] = merged_prev['views'].fillna(0).astype(int)
+            merged_prev['add_to_cart'] = merged_prev['add_to_cart'].fillna(0).astype(int)
+            merged_prev['purchases'] = merged_prev['purchases'].fillna(0).astype(int)
+            merged_prev['revenue'] = merged_prev['revenue'].fillna(0)
+            period_data['merged_data_previous'] = merged_prev
+    
+    return merged
 
 
 def merge_and_analyze():
@@ -1033,13 +1119,43 @@ def index():
         
         analysis_period = get_analysis_period()
     
+    # 利用可能な期間を確認
+    available_periods = []
+    for p in ['yesterday', 'weekly', '3days']:
+        if data_store['periods_data'][p]['ga_sales']:
+            available_periods.append(p)
+    
     return render_template('index.html', 
                          has_data=has_data, 
                          brands=brands,
                          summary=summary,
                          pv_ranking_by_brand=pv_ranking_by_brand,
                          analysis_period=analysis_period,
-                         is_admin=is_admin)
+                         is_admin=is_admin,
+                         current_period=data_store['current_period'],
+                         available_periods=available_periods)
+
+
+@app.route('/switch-period/<period_type>')
+@login_required
+def switch_period(period_type):
+    """期間を切り替え"""
+    valid_periods = ['yesterday', 'weekly', '3days']
+    if period_type not in valid_periods:
+        flash('無効な期間です', 'error')
+        return redirect(url_for('index'))
+    
+    # 期間データが存在するか確認
+    if not data_store['periods_data'][period_type]['ga_sales']:
+        flash(f'{period_type}のデータがまだ取得されていません', 'error')
+        return redirect(url_for('index'))
+    
+    # 期間を切り替え
+    switch_period_data(period_type)
+    
+    period_names = {'yesterday': '前日', 'weekly': '週間', '3days': '3日間'}
+    flash(f'{period_names.get(period_type, period_type)}データに切り替えました', 'success')
+    return redirect(url_for('index'))
 
 
 @app.route('/upload', methods=['GET', 'POST'])
@@ -1219,7 +1335,7 @@ SCHEDULER_SECRET = os.environ.get('SCHEDULER_SECRET', 'default-scheduler-secret-
 def scheduled_update():
     """
     Cloud Schedulerから呼び出される自動更新エンドポイント
-    毎日12:00 JSTに実行され、前日データを取得
+    毎日12:00 JSTに実行され、3期間すべてのデータを取得
     """
     # シークレットトークンで認証
     auth_header = request.headers.get('X-Scheduler-Secret', '')
@@ -1243,58 +1359,73 @@ def scheduled_update():
             fetch_all_brands_channel_data
         )
         
-        # 前日データを取得（メイン）
-        period_type = 'yesterday'
-        print(f"[SCHEDULER] Starting scheduled update for {period_type}")
+        # 3期間すべてを取得
+        period_types = ['yesterday', 'weekly', '3days']
         
-        results = fetch_all_brands_data(period_type)
-        
-        if not results:
-            results_summary['success'] = False
-            results_summary['errors'].append('Failed to fetch GA4 data')
-            return jsonify(results_summary), 500
-        
-        # データを保存
-        for brand, result in results.items():
-            data_store['ga_sales'][brand] = result
-            period = result['period']
+        for period_type in period_types:
+            print(f"[SCHEDULER] Fetching {period_type} data...")
+            results_summary['periods'][period_type] = {'brands': {}, 'success': True}
             
-            # R2に保存
-            if save_ga4_data and is_r2_enabled():
-                start_str = period['start_date'].strftime('%Y%m%d')
-                end_str = period['end_date'].strftime('%Y%m%d')
-                save_ga4_data(brand, result['data'], start_str, end_str)
-            
-            results_summary['periods'][brand] = {
-                'items': len(result['data']),
-                'start': period['start_date'].strftime('%Y-%m-%d'),
-                'end': period['end_date'].strftime('%Y-%m-%d')
-            }
-            print(f"[SCHEDULER] {brand}: {len(result['data'])} items")
+            try:
+                # 現在期間のデータを取得
+                results = fetch_all_brands_data(period_type)
+                
+                if not results:
+                    results_summary['periods'][period_type]['success'] = False
+                    results_summary['errors'].append(f'Failed to fetch {period_type} data')
+                    continue
+                
+                # データを期間別ストアに保存
+                for brand, result in results.items():
+                    data_store['periods_data'][period_type]['ga_sales'][brand] = result
+                    period = result['period']
+                    
+                    results_summary['periods'][period_type]['brands'][brand] = {
+                        'items': len(result['data']),
+                        'start': period['start_date'].strftime('%Y-%m-%d'),
+                        'end': period['end_date'].strftime('%Y-%m-%d')
+                    }
+                    print(f"[SCHEDULER] {period_type}/{brand}: {len(result['data'])} items")
+                
+                # 前期間データも取得（比較用）
+                for brand in results.keys():
+                    prev_result = None
+                    if period_type == 'yesterday':
+                        prev_result = fetch_day_before_yesterday_data(brand)
+                    elif period_type == '3days':
+                        prev_result = fetch_previous_3days_data(brand)
+                    elif period_type == 'weekly':
+                        prev_result = fetch_previous_weekly_data(brand)
+                    
+                    if prev_result:
+                        data_store['periods_data'][period_type]['ga_sales_previous'][brand] = prev_result
+                
+                # チャネルデータも取得
+                try:
+                    channel_results = fetch_all_brands_channel_data(period_type)
+                    for brand, channel_df in channel_results.items():
+                        data_store['periods_data'][period_type]['channel_data'][brand] = channel_df
+                except Exception as e:
+                    print(f"[SCHEDULER] Channel data error for {period_type}: {e}")
+                
+            except Exception as e:
+                results_summary['periods'][period_type]['success'] = False
+                results_summary['errors'].append(f'{period_type} error: {str(e)}')
+                print(f"[SCHEDULER] Error fetching {period_type}: {e}")
         
-        # 前期間データも取得（比較用）
-        for brand in results.keys():
-            prev_result = fetch_day_before_yesterday_data(brand)
-            if prev_result:
-                data_store['ga_sales_previous'][brand] = prev_result
-                print(f"[SCHEDULER] {brand} previous period: {len(prev_result['data'])} items")
+        # デフォルトの期間データをメインストアにコピー
+        default_period = 'yesterday'
+        switch_period_data(default_period)
         
-        # チャネルデータも取得
-        try:
-            channel_results = fetch_all_brands_channel_data(period_type)
-            for brand, channel_df in channel_results.items():
-                data_store['channel_data'][brand] = channel_df
-                print(f"[SCHEDULER] {brand} channel data: {len(channel_df)} sources")
-        except Exception as e:
-            results_summary['errors'].append(f'Channel data error: {str(e)}')
-            print(f"[SCHEDULER] Channel data error: {e}")
-        
-        # 商品マスタがあれば分析実行
+        # 商品マスタがあれば全期間の分析を実行
         if data_store['product_master'] is not None:
-            merge_and_analyze()
-            print("[SCHEDULER] Data merge completed")
+            for period_type in period_types:
+                merge_and_analyze_for_period(period_type)
+            # デフォルト期間のデータをメインにセット
+            switch_period_data(default_period)
+            print("[SCHEDULER] Data merge completed for all periods")
         
-        print(f"[SCHEDULER] Scheduled update completed successfully")
+        print(f"[SCHEDULER] Scheduled update completed successfully for all periods")
         return jsonify(results_summary), 200
         
     except Exception as e:
