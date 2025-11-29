@@ -1212,6 +1212,98 @@ def fetch_ga4():
     return redirect(url_for('upload'))
 
 
+# スケジュール更新用のシークレットトークン
+SCHEDULER_SECRET = os.environ.get('SCHEDULER_SECRET', 'default-scheduler-secret-change-me')
+
+@app.route('/api/scheduled-update', methods=['POST'])
+def scheduled_update():
+    """
+    Cloud Schedulerから呼び出される自動更新エンドポイント
+    毎日12:00 JSTに実行され、前日データを取得
+    """
+    # シークレットトークンで認証
+    auth_header = request.headers.get('X-Scheduler-Secret', '')
+    if auth_header != SCHEDULER_SECRET:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    if not is_ga4_configured():
+        return jsonify({'error': 'GA4 API not configured'}), 500
+    
+    results_summary = {
+        'timestamp': datetime.now().isoformat(),
+        'periods': {},
+        'success': True,
+        'errors': []
+    }
+    
+    try:
+        from ga4_api import (
+            fetch_all_brands_data, fetch_day_before_yesterday_data,
+            fetch_previous_3days_data, fetch_previous_weekly_data,
+            fetch_all_brands_channel_data
+        )
+        
+        # 前日データを取得（メイン）
+        period_type = 'yesterday'
+        print(f"[SCHEDULER] Starting scheduled update for {period_type}")
+        
+        results = fetch_all_brands_data(period_type)
+        
+        if not results:
+            results_summary['success'] = False
+            results_summary['errors'].append('Failed to fetch GA4 data')
+            return jsonify(results_summary), 500
+        
+        # データを保存
+        for brand, result in results.items():
+            data_store['ga_sales'][brand] = result
+            period = result['period']
+            
+            # R2に保存
+            if save_ga4_data and is_r2_enabled():
+                start_str = period['start_date'].strftime('%Y%m%d')
+                end_str = period['end_date'].strftime('%Y%m%d')
+                save_ga4_data(brand, result['data'], start_str, end_str)
+            
+            results_summary['periods'][brand] = {
+                'items': len(result['data']),
+                'start': period['start_date'].strftime('%Y-%m-%d'),
+                'end': period['end_date'].strftime('%Y-%m-%d')
+            }
+            print(f"[SCHEDULER] {brand}: {len(result['data'])} items")
+        
+        # 前期間データも取得（比較用）
+        for brand in results.keys():
+            prev_result = fetch_day_before_yesterday_data(brand)
+            if prev_result:
+                data_store['ga_sales_previous'][brand] = prev_result
+                print(f"[SCHEDULER] {brand} previous period: {len(prev_result['data'])} items")
+        
+        # チャネルデータも取得
+        try:
+            channel_results = fetch_all_brands_channel_data(period_type)
+            for brand, channel_df in channel_results.items():
+                data_store['channel_data'][brand] = channel_df
+                print(f"[SCHEDULER] {brand} channel data: {len(channel_df)} sources")
+        except Exception as e:
+            results_summary['errors'].append(f'Channel data error: {str(e)}')
+            print(f"[SCHEDULER] Channel data error: {e}")
+        
+        # 商品マスタがあれば分析実行
+        if data_store['product_master'] is not None:
+            merge_and_analyze()
+            print("[SCHEDULER] Data merge completed")
+        
+        print(f"[SCHEDULER] Scheduled update completed successfully")
+        return jsonify(results_summary), 200
+        
+    except Exception as e:
+        results_summary['success'] = False
+        results_summary['errors'].append(str(e))
+        print(f"[SCHEDULER] Error: {e}")
+        return jsonify(results_summary), 500
+
+
 @app.route('/brand/<brand_name>')
 @login_required
 def brand_detail(brand_name):
