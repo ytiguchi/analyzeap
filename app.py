@@ -1711,8 +1711,8 @@ def init_from_r2():
                     
                     print(f"[OK] Initialized with {default_period} data")
             
-            # 旧方式のフォールバック
-            elif get_latest_ga4_data:
+            # 旧方式のフォールバック（期間データがない場合）
+            if not loaded_periods and get_latest_ga4_data:
                 print("[INFO] Loading GA4 data from R2 (legacy)...")
                 for brand in BRANDS:
                     ga4_data = get_latest_ga4_data(brand)
