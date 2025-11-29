@@ -168,14 +168,15 @@ data_store = {
     'ga_sales': {},  # ブランド別に保存 {'rady': {'data': df, 'period': {...}}, ...}
     'ga_sales_previous': {},  # 前期間データ（比較用）
     'channel_data': {},  # チャネル別データ {'rady': df, ...}
+    'campaign_data': {},  # キャンペーン別データ {'rady': {'current': df, 'previous': df}, ...}
     'merged_data': None,
     'merged_data_previous': None,  # 前期間のマージデータ
     'current_period': 'yesterday',  # 現在表示中の期間
     # 期間別データ（自動更新用）
     'periods_data': {
-        'yesterday': {'ga_sales': {}, 'ga_sales_previous': {}, 'channel_data': {}, 'merged_data': None, 'merged_data_previous': None},
-        'weekly': {'ga_sales': {}, 'ga_sales_previous': {}, 'channel_data': {}, 'merged_data': None, 'merged_data_previous': None},
-        '3days': {'ga_sales': {}, 'ga_sales_previous': {}, 'channel_data': {}, 'merged_data': None, 'merged_data_previous': None},
+        'yesterday': {'ga_sales': {}, 'ga_sales_previous': {}, 'channel_data': {}, 'campaign_data': {}, 'merged_data': None, 'merged_data_previous': None},
+        'weekly': {'ga_sales': {}, 'ga_sales_previous': {}, 'channel_data': {}, 'campaign_data': {}, 'merged_data': None, 'merged_data_previous': None},
+        '3days': {'ga_sales': {}, 'ga_sales_previous': {}, 'channel_data': {}, 'campaign_data': {}, 'merged_data': None, 'merged_data_previous': None},
     }
 }
 
@@ -416,6 +417,7 @@ def switch_period_data(period_type):
     data_store['ga_sales'] = period_data['ga_sales'].copy()
     data_store['ga_sales_previous'] = period_data['ga_sales_previous'].copy()
     data_store['channel_data'] = period_data['channel_data'].copy()
+    data_store['campaign_data'] = period_data.get('campaign_data', {}).copy()
     data_store['merged_data'] = period_data['merged_data']
     data_store['merged_data_previous'] = period_data['merged_data_previous']
     data_store['current_period'] = period_type
@@ -952,6 +954,130 @@ def process_channel_data(channel_info):
     return results
 
 
+def process_campaign_data(campaign_info):
+    """
+    キャンペーンデータを広告タイプ別に整形
+    """
+    from ga4_api import classify_ad_type, AD_TYPE_PATTERNS
+    
+    if not campaign_info or 'current' not in campaign_info:
+        return []
+    
+    current_df = campaign_info['current']
+    prev_df = campaign_info.get('previous')
+    
+    if current_df is None or len(current_df) == 0:
+        return []
+    
+    # 広告タイプを分類
+    current_df = current_df.copy()
+    current_df['ad_type'] = current_df.apply(
+        lambda row: classify_ad_type(row['campaign'], row['source'], row['medium']),
+        axis=1
+    )
+    
+    # 広告タイプがNoneは除外（オーガニックなど）
+    ad_df = current_df[current_df['ad_type'].notna()]
+    
+    if len(ad_df) == 0:
+        return []
+    
+    # 広告タイプごとに集計
+    ad_summary = ad_df.groupby('ad_type').agg({
+        'sessions': 'sum',
+        'users': 'sum',
+        'purchases': 'sum',
+        'revenue': 'sum',
+    }).reset_index()
+    
+    # 前期間データの処理
+    prev_summary = None
+    if prev_df is not None and len(prev_df) > 0:
+        prev_df = prev_df.copy()
+        prev_df['ad_type'] = prev_df.apply(
+            lambda row: classify_ad_type(row['campaign'], row['source'], row['medium']),
+            axis=1
+        )
+        prev_ad_df = prev_df[prev_df['ad_type'].notna()]
+        if len(prev_ad_df) > 0:
+            prev_summary = prev_ad_df.groupby('ad_type').agg({
+                'sessions': 'sum',
+                'users': 'sum',
+                'purchases': 'sum',
+                'revenue': 'sum',
+            }).reset_index()
+            prev_summary = prev_summary.set_index('ad_type')
+    
+    # キャンペーン詳細を取得（広告タイプごと）
+    campaign_details = {}
+    for ad_type in ad_df['ad_type'].unique():
+        type_df = ad_df[ad_df['ad_type'] == ad_type]
+        campaigns = type_df.groupby('campaign').agg({
+            'sessions': 'sum',
+            'purchases': 'sum',
+            'revenue': 'sum',
+        }).reset_index()
+        campaigns = campaigns.sort_values('revenue', ascending=False).head(5)
+        campaign_details[ad_type] = campaigns.to_dict('records')
+    
+    # 結果を整形
+    results = []
+    for _, row in ad_summary.iterrows():
+        ad_type = row['ad_type']
+        
+        # 広告タイプ名を取得
+        if ad_type in AD_TYPE_PATTERNS:
+            ad_name = AD_TYPE_PATTERNS[ad_type]['name']
+        elif ad_type == 'other_paid':
+            ad_name = '💼 その他広告'
+        else:
+            ad_name = f'📊 {ad_type}'
+        
+        item = {
+            'ad_type': ad_type,
+            'ad_name': ad_name,
+            'sessions': int(row['sessions']),
+            'users': int(row['users']),
+            'purchases': int(row['purchases']),
+            'revenue': float(row['revenue']),
+            'cvr': round((row['purchases'] / row['sessions'] * 100) if row['sessions'] > 0 else 0, 2),
+            'roas': 0,  # ROASは広告費データがないと計算不可
+        }
+        
+        # 前期間との比較
+        if prev_summary is not None and ad_type in prev_summary.index:
+            prev = prev_summary.loc[ad_type]
+            item['prev_sessions'] = int(prev['sessions'])
+            item['prev_revenue'] = float(prev['revenue'])
+            item['prev_purchases'] = int(prev['purchases'])
+            
+            item['delta_sessions'] = item['sessions'] - item['prev_sessions']
+            item['delta_revenue'] = item['revenue'] - item['prev_revenue']
+            item['delta_purchases'] = item['purchases'] - item['prev_purchases']
+            
+            if item['prev_revenue'] > 0:
+                item['delta_revenue_pct'] = round((item['revenue'] - item['prev_revenue']) / item['prev_revenue'] * 100, 1)
+            else:
+                item['delta_revenue_pct'] = 100 if item['revenue'] > 0 else 0
+        else:
+            item['prev_sessions'] = 0
+            item['prev_revenue'] = 0
+            item['prev_purchases'] = 0
+            item['delta_sessions'] = item['sessions']
+            item['delta_revenue'] = item['revenue']
+            item['delta_purchases'] = item['purchases']
+            item['delta_revenue_pct'] = 0
+        
+        # キャンペーン詳細
+        item['campaigns'] = campaign_details.get(ad_type, [])
+        
+        results.append(item)
+    
+    # 売上順でソート
+    results.sort(key=lambda x: x['revenue'], reverse=True)
+    return results
+
+
 def get_pv_ranking(brand=None, limit=50):
     """PV（閲覧数）ランキングを取得（商品名でグループ化、SKU詳細付き）"""
     df = data_store['merged_data']
@@ -1390,9 +1516,19 @@ def fetch_ga4():
             channel_results = fetch_all_brands_channel_data(period_type)
             for brand, channel_df in channel_results.items():
                 data_store['channel_data'][brand] = channel_df
-                print(f"[OK] Fetched channel data for {brand}: {len(channel_df)} channels")
+                print(f"[OK] Fetched channel data for {brand}: {len(channel_df) if channel_df is not None else 0} channels")
         except Exception as e:
             print(f"[WARN] Failed to fetch channel data: {e}")
+        
+        # キャンペーンデータも取得
+        try:
+            from ga4_api import fetch_all_brands_campaign_data
+            campaign_results = fetch_all_brands_campaign_data(period_type)
+            for brand, campaign_info in campaign_results.items():
+                data_store['campaign_data'][brand] = campaign_info
+                print(f"[OK] Fetched campaign data for {brand}")
+        except Exception as e:
+            print(f"[WARN] Failed to fetch campaign data: {e}")
         
         # 商品マスタがあれば分析実行
         if data_store['product_master'] is not None:
@@ -1402,6 +1538,7 @@ def fetch_ga4():
             data_store['periods_data'][period_type]['ga_sales'] = data_store['ga_sales'].copy()
             data_store['periods_data'][period_type]['ga_sales_previous'] = data_store['ga_sales_previous'].copy()
             data_store['periods_data'][period_type]['channel_data'] = data_store['channel_data'].copy()
+            data_store['periods_data'][period_type]['campaign_data'] = data_store['campaign_data'].copy()
             data_store['periods_data'][period_type]['merged_data'] = data_store['merged_data']
             data_store['periods_data'][period_type]['merged_data_previous'] = data_store['merged_data_previous']
             data_store['current_period'] = period_type
@@ -1578,11 +1715,18 @@ def brand_detail(brand_name):
     
     # チャネルデータ取得（整形済み）
     channel_data = []
+    campaign_data = []
     brand_key = brand.lower() if brand else None
     if brand_key and brand_key in data_store.get('channel_data', {}):
         channel_info = data_store['channel_data'][brand_key]
         if channel_info:
             channel_data = process_channel_data(channel_info)
+    
+    # キャンペーンデータ取得（広告タイプ別）
+    if brand_key and brand_key in data_store.get('campaign_data', {}):
+        campaign_info = data_store['campaign_data'][brand_key]
+        if campaign_info:
+            campaign_data = process_campaign_data(campaign_info)
     
     # ブランド統計
     df = data_store['merged_data']
@@ -1623,6 +1767,7 @@ def brand_detail(brand_name):
                          pv_ranking=pv_ranking,
                          anomalies=anomalies,
                          channel_data=channel_data,
+                         campaign_data=campaign_data,
                          brands=brands,
                          analysis_period=analysis_period,
                          is_admin=is_admin)

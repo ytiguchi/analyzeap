@@ -122,14 +122,7 @@ def fetch_ecommerce_data(brand: str, start_date: str, end_date: str) -> pd.DataF
             })
         
         df = pd.DataFrame(rows)
-        
-        # 空のレスポンスの場合、カラムを明示的に設定
-        if len(df) == 0:
-            df = pd.DataFrame(columns=['sku_id', 'item_name', 'views', 'add_to_cart', 'purchases', 'revenue'])
-            print(f"[WARN] No data from GA4 for {brand} (empty response)")
-        else:
-            print(f"[OK] Fetched {len(df)} items from GA4 for {brand}")
-        
+        print(f"[OK] Fetched {len(df)} items from GA4 for {brand}")
         return df
     
     except Exception as e:
@@ -412,6 +405,177 @@ SOURCE_NAME_MAP = {
 def translate_channel_name(channel: str) -> str:
     """チャネル名を日本語に変換"""
     return CHANNEL_NAME_MAP.get(channel, f'📡 {channel}')
+
+
+def fetch_campaign_data(brand: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    キャンペーン別のトラフィック・売上データを取得
+    """
+    client = get_ga4_client()
+    if client is None:
+        return None
+    
+    config = get_ga4_config()
+    property_id = config['properties'].get(brand, '')
+    
+    if not property_id:
+        return None
+    
+    try:
+        request = RunReportRequest(
+            property=f"properties/{property_id}",
+            dimensions=[
+                Dimension(name="sessionCampaignName"),
+                Dimension(name="sessionSource"),
+                Dimension(name="sessionMedium"),
+            ],
+            metrics=[
+                Metric(name="sessions"),
+                Metric(name="activeUsers"),
+                Metric(name="ecommercePurchases"),
+                Metric(name="purchaseRevenue"),
+            ],
+            date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
+        )
+        
+        response = client.run_report(request)
+        
+        rows = []
+        for row in response.rows:
+            rows.append({
+                'campaign': row.dimension_values[0].value,
+                'source': row.dimension_values[1].value,
+                'medium': row.dimension_values[2].value,
+                'sessions': int(row.metric_values[0].value),
+                'users': int(row.metric_values[1].value),
+                'purchases': int(row.metric_values[2].value),
+                'revenue': float(row.metric_values[3].value),
+            })
+        
+        df = pd.DataFrame(rows)
+        print(f"[OK] Fetched campaign data for {brand}: {len(df)} campaigns")
+        return df
+    
+    except Exception as e:
+        print(f"[ERROR] Error fetching campaign data for {brand}: {e}")
+        return None
+
+
+# 広告タイプの分類パターン
+AD_TYPE_PATTERNS = {
+    'pmax': {
+        'name': '🚀 Performance Max',
+        'patterns': ['pmax', 'performance max', 'performance_max', 'p-max'],
+    },
+    'meta': {
+        'name': '📘 Meta広告（FB/IG）',
+        'patterns': ['facebook', 'instagram', 'meta', 'fb_', 'ig_'],
+        'sources': ['facebook', 'instagram', 'fb', 'ig'],
+    },
+    'line': {
+        'name': '💚 LINE広告',
+        'patterns': ['line_ads', 'line広告', 'lineads'],
+        'sources': ['line'],
+        'mediums': ['cpc', 'cpm', 'paid'],
+    },
+    'google_search': {
+        'name': '🔍 Google検索広告',
+        'patterns': ['google_search', 'gsa_', 'search_'],
+        'sources': ['google'],
+        'mediums': ['cpc', 'ppc'],
+    },
+    'google_display': {
+        'name': '🖼️ Googleディスプレイ',
+        'patterns': ['gdn_', 'display_', 'gdn'],
+        'sources': ['google'],
+        'mediums': ['display', 'banner'],
+    },
+    'yahoo': {
+        'name': '🔴 Yahoo!広告',
+        'patterns': ['yahoo_', 'yda_', 'yss_'],
+        'sources': ['yahoo'],
+        'mediums': ['cpc', 'cpm'],
+    },
+    'tiktok': {
+        'name': '🎵 TikTok広告',
+        'patterns': ['tiktok_', 'tiktok'],
+        'sources': ['tiktok'],
+        'mediums': ['cpc', 'cpm', 'paid'],
+    },
+    'affiliate': {
+        'name': '🤝 アフィリエイト',
+        'patterns': ['affiliate', 'aff_', 'a8', 'valuecommerce', 'accesstrade'],
+    },
+}
+
+
+def classify_ad_type(campaign: str, source: str, medium: str) -> str:
+    """キャンペーン/ソース/メディウムから広告タイプを分類"""
+    campaign_lower = campaign.lower() if campaign else ''
+    source_lower = source.lower() if source else ''
+    medium_lower = medium.lower() if medium else ''
+    
+    for ad_type, config in AD_TYPE_PATTERNS.items():
+        # キャンペーン名でマッチ
+        for pattern in config.get('patterns', []):
+            if pattern in campaign_lower:
+                return ad_type
+        
+        # ソース+メディウムでマッチ
+        if 'sources' in config:
+            for src_pattern in config['sources']:
+                if src_pattern in source_lower:
+                    # メディウムもチェック（有料広告のみ）
+                    if 'mediums' in config:
+                        for med_pattern in config['mediums']:
+                            if med_pattern in medium_lower:
+                                return ad_type
+                    elif medium_lower in ['cpc', 'cpm', 'paid', 'display', 'banner', 'video']:
+                        return ad_type
+    
+    # 有料広告っぽいけど分類できない
+    if medium_lower in ['cpc', 'cpm', 'paid']:
+        return 'other_paid'
+    
+    return None  # 広告ではない
+
+
+def fetch_all_brands_campaign_data(period_type: str = 'weekly') -> dict:
+    """全ブランドのキャンペーンデータを取得"""
+    config = get_ga4_config()
+    results = {}
+    
+    # 期間計算
+    if period_type == 'yesterday':
+        start_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        end_date = start_date
+        prev_start = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
+        prev_end = prev_start
+    elif period_type == '3days':
+        end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        start_date = (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d')
+        prev_end = (datetime.now() - timedelta(days=4)).strftime('%Y-%m-%d')
+        prev_start = (datetime.now() - timedelta(days=6)).strftime('%Y-%m-%d')
+    else:  # weekly
+        end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+        prev_end = (datetime.now() - timedelta(days=8)).strftime('%Y-%m-%d')
+        prev_start = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%d')
+    
+    for brand in config['properties'].keys():
+        try:
+            df = fetch_campaign_data(brand, start_date, end_date)
+            prev_df = fetch_campaign_data(brand, prev_start, prev_end)
+            
+            if df is not None:
+                results[brand] = {
+                    'current': df,
+                    'previous': prev_df
+                }
+        except Exception as e:
+            print(f"[ERROR] Campaign data for {brand}: {e}")
+    
+    return results
 
 
 def translate_source_name(source: str) -> str:

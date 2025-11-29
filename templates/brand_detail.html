@@ -87,6 +87,11 @@
         <button class="tab" data-tab="channel" onclick="switchTab('channel')">
             📡 チャネル{% if channel_data %} ({{ channel_data|length }}){% endif %}
         </button>
+        {% if campaign_data and campaign_data|length > 0 %}
+        <button class="tab" data-tab="campaign" onclick="switchTab('campaign')">
+            🎯 広告効果 ({{ campaign_data|length }})
+        </button>
+        {% endif %}
     </div>
 
     <!-- PVランキング（2カラム・SKU別詳細付き） -->
@@ -533,6 +538,92 @@
             <p style="color: var(--text-secondary);">チャネルデータがありません</p>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">「データ更新」でGA4データを取得するとチャネル情報も表示されます</p>
             <a href="/upload" class="btn btn-primary" style="margin-top: 1rem;">データ更新へ</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 広告キャンペーン別分析 -->
+    <div id="tab-campaign" class="tab-content" style="display: none;">
+        {% if campaign_data and campaign_data|length > 0 %}
+        <div class="campaign-intro">
+            <p>🎯 広告キャンペーン別の売上・セッション・購入を分析。Pmax、Meta広告、LINE広告などタイプ別に自動分類しています。</p>
+        </div>
+        <div class="campaign-list">
+            {% for ad in campaign_data %}
+            <div class="campaign-row animate-in" style="animation-delay: {{ loop.index * 0.03 }}s;">
+                <div class="campaign-main">
+                    <div class="campaign-name-block">
+                        <span class="campaign-name-ja">{{ ad.ad_name }}</span>
+                    </div>
+                    
+                    <div class="campaign-kpi-row">
+                        <!-- 売上 -->
+                        <div class="campaign-kpi main-kpi">
+                            <span class="kpi-num">¥{{ "{:,.0f}".format(ad.revenue or 0) }}</span>
+                            <span class="kpi-lbl">売上</span>
+                            {% if ad.delta_revenue_pct != 0 %}
+                            <span class="kpi-delta {% if ad.delta_revenue_pct > 0 %}up{% else %}down{% endif %}">
+                                {% if ad.delta_revenue_pct > 0 %}↑{% else %}↓{% endif %}¥{{ "{:,.0f}".format(ad.delta_revenue|abs) }}
+                                <span class="delta-pct">({{ "{:+.0f}".format(ad.delta_revenue_pct) }}%)</span>
+                            </span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- セッション -->
+                        <div class="campaign-kpi">
+                            <span class="kpi-num">{{ "{:,}".format(ad.sessions or 0) }}</span>
+                            <span class="kpi-lbl">セッション</span>
+                            {% if ad.prev_sessions and ad.prev_sessions > 0 %}
+                            <span class="kpi-delta-mini {% if ad.sessions > ad.prev_sessions %}up{% else %}down{% endif %}">
+                                {{ "{:+.0f}".format((ad.sessions - ad.prev_sessions) / ad.prev_sessions * 100) }}%
+                            </span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- 購入 -->
+                        <div class="campaign-kpi">
+                            <span class="kpi-num">{{ ad.purchases or 0 }}</span>
+                            <span class="kpi-lbl">購入</span>
+                            {% if ad.prev_purchases and ad.prev_purchases > 0 %}
+                            <span class="kpi-delta-mini {% if ad.purchases > ad.prev_purchases %}up{% else %}down{% endif %}">
+                                {{ "{:+.0f}".format((ad.purchases - ad.prev_purchases) / ad.prev_purchases * 100) }}%
+                            </span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- CVR -->
+                        <div class="campaign-kpi">
+                            <span class="kpi-num {% if (ad.cvr or 0) >= 1 %}highlight{% endif %}">{{ "%.2f"|format(ad.cvr or 0) }}%</span>
+                            <span class="kpi-lbl">CVR</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- キャンペーン詳細 -->
+                {% if ad.campaigns and ad.campaigns|length > 0 %}
+                <div class="campaign-details">
+                    <div class="details-header">📋 キャンペーン詳細</div>
+                    <div class="details-list">
+                        {% for camp in ad.campaigns %}
+                        <div class="detail-item">
+                            <span class="detail-name">{{ camp.campaign if camp.campaign|length < 40 else camp.campaign[:40] + '...' }}</span>
+                            <span class="detail-stats">
+                                <span class="detail-purchases">{{ camp.purchases }} 購入</span>
+                                <span class="detail-revenue">¥{{ "{:,.0f}".format(camp.revenue) }}</span>
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card" style="text-align: center; padding: 3rem;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🎯</div>
+            <p style="color: var(--text-secondary);">広告キャンペーンデータがありません</p>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">広告を配信している場合、「データ更新」でキャンペーン情報が表示されます</p>
         </div>
         {% endif %}
     </div>
@@ -1696,6 +1787,192 @@
         justify-content: space-between;
     }
     .channel-name-block {
+        min-width: auto;
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* キャンペーン別分析スタイル */
+.campaign-intro {
+    background: linear-gradient(135deg, rgba(232, 164, 164, 0.1) 0%, rgba(255, 205, 178, 0.1) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.campaign-intro p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.6;
+}
+
+.campaign-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.campaign-row {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.25rem;
+    transition: all 0.2s ease;
+}
+
+.campaign-row:hover {
+    border-color: var(--accent-pink);
+    box-shadow: var(--shadow-hover);
+}
+
+.campaign-main {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.campaign-name-block {
+    min-width: 200px;
+}
+
+.campaign-name-ja {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.campaign-kpi-row {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.campaign-kpi {
+    text-align: center;
+    min-width: 80px;
+}
+
+.campaign-kpi.main-kpi {
+    min-width: 140px;
+    text-align: left;
+}
+
+.campaign-kpi .kpi-num {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.campaign-kpi.main-kpi .kpi-num {
+    font-size: 1.4rem;
+    color: var(--accent-coral);
+}
+
+.campaign-kpi .kpi-lbl {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.campaign-kpi .kpi-delta {
+    display: block;
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+}
+
+.campaign-kpi .kpi-delta.up { color: #22c55e; }
+.campaign-kpi .kpi-delta.down { color: #ef4444; }
+
+.campaign-kpi .kpi-delta-mini {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.35rem;
+    border-radius: 4px;
+    margin-top: 0.25rem;
+}
+
+.campaign-kpi .kpi-delta-mini.up {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.campaign-kpi .kpi-delta-mini.down {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.campaign-details {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--border-color);
+}
+
+.details-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+.details-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.detail-name {
+    color: var(--text-primary);
+    font-weight: 500;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.detail-stats {
+    display: flex;
+    gap: 1rem;
+}
+
+.detail-purchases {
+    color: var(--text-muted);
+}
+
+.detail-revenue {
+    color: var(--accent-coral);
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .campaign-main {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .campaign-kpi-row {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .campaign-name-block {
         min-width: auto;
         width: 100%;
         margin-bottom: 0.5rem;
