@@ -1125,6 +1125,11 @@ def index():
         if data_store['periods_data'][p]['ga_sales']:
             available_periods.append(p)
     
+    # periods_dataが空でも、ga_salesにデータがあれば現在の期間を追加
+    current_period = data_store['current_period']
+    if not available_periods and data_store['ga_sales']:
+        available_periods = [current_period]
+    
     return render_template('index.html', 
                          has_data=has_data, 
                          brands=brands,
@@ -1132,7 +1137,7 @@ def index():
                          pv_ranking_by_brand=pv_ranking_by_brand,
                          analysis_period=analysis_period,
                          is_admin=is_admin,
-                         current_period=data_store['current_period'],
+                         current_period=current_period,
                          available_periods=available_periods)
 
 

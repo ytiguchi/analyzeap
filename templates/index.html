@@ -24,30 +24,34 @@
     </div>
 {% else %}
     <!-- 期間切り替えタブ -->
-    {% if available_periods %}
     <div class="period-tabs animate-in">
         <div class="period-tabs-label">📅 期間:</div>
         <div class="period-tabs-buttons">
             <a href="{{ url_for('switch_period', period_type='yesterday') }}" 
-               class="period-tab {% if current_period == 'yesterday' %}active{% endif %} {% if 'yesterday' not in available_periods %}disabled{% endif %}">
+               class="period-tab {% if current_period == 'yesterday' %}active{% endif %} {% if 'yesterday' not in available_periods %}disabled{% endif %}"
+               {% if 'yesterday' not in available_periods %}title="毎日12時に自動取得されます"{% endif %}>
                 🕐 前日
             </a>
             <a href="{{ url_for('switch_period', period_type='3days') }}" 
-               class="period-tab {% if current_period == '3days' %}active{% endif %} {% if '3days' not in available_periods %}disabled{% endif %}">
+               class="period-tab {% if current_period == '3days' %}active{% endif %} {% if '3days' not in available_periods %}disabled{% endif %}"
+               {% if '3days' not in available_periods %}title="毎日12時に自動取得されます"{% endif %}>
                 📅 3日間
             </a>
             <a href="{{ url_for('switch_period', period_type='weekly') }}" 
-               class="period-tab {% if current_period == 'weekly' %}active{% endif %} {% if 'weekly' not in available_periods %}disabled{% endif %}">
+               class="period-tab {% if current_period == 'weekly' %}active{% endif %} {% if 'weekly' not in available_periods %}disabled{% endif %}"
+               {% if 'weekly' not in available_periods %}title="毎日12時に自動取得されます"{% endif %}>
                 📆 週間
             </a>
         </div>
+        {% if available_periods|length == 1 %}
+        <span class="period-hint">💡 毎日12時に全期間が自動更新されます</span>
+        {% endif %}
         {% if is_admin %}
         <a href="{{ url_for('upload') }}" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.75rem; margin-left: auto;">
             🔄 手動更新
         </a>
         {% endif %}
     </div>
-    {% endif %}
 
     <!-- 分析期間バナー -->
     {% if analysis_period %}
@@ -264,6 +268,12 @@
     opacity: 0.5;
     pointer-events: none;
     cursor: not-allowed;
+}
+
+.period-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-left: 0.5rem;
 }
 
 .period-banner {
