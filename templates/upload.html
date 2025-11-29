@@ -53,9 +53,19 @@
                 </button>
             </form>
             
-            <div class="api-warning">
-                <span class="warning-icon">🐰</span>
-                <span class="warning-text">連打しないでね！API費用がかかっちゃうよ〜</span>
+            <div class="api-tips">
+                <div class="tip-item compare-tip">
+                    <span class="tip-icon">📊</span>
+                    <span class="tip-text">選んだ期間と<strong>その前の同じ期間</strong>を比較するよ！</span>
+                </div>
+                <div class="tip-item time-tip">
+                    <span class="tip-icon">☀️</span>
+                    <span class="tip-text">「前日」データは<strong>午後以降</strong>に見るのがおすすめ！<br><span class="tip-sub">朝イチだとまだ集計中かも…</span></span>
+                </div>
+                <div class="tip-item warning-tip">
+                    <span class="tip-icon">🐰</span>
+                    <span class="tip-text">連打しないでね！API費用がかかっちゃうよ〜</span>
+                </div>
             </div>
         </div>
     </div>
@@ -205,26 +215,59 @@ details[open] > summary::before {
     text-align: center;
 }
 
-/* API警告メッセージ */
-.api-warning {
+/* APIヒント・警告メッセージ */
+.api-tips {
+    margin-top: 1.5rem;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    margin-top: 1.25rem;
-    padding: 0.6rem 1rem;
-    background: linear-gradient(135deg, rgba(255, 182, 193, 0.2) 0%, rgba(255, 218, 185, 0.2) 100%);
-    border-radius: 20px;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.tip-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 12px;
     font-size: 0.8rem;
+    text-align: left;
 }
 
-.warning-icon {
-    font-size: 1.1rem;
+.tip-item.compare-tip {
+    background: linear-gradient(135deg, rgba(157, 196, 176, 0.2) 0%, rgba(157, 196, 176, 0.1) 100%);
 }
 
-.warning-text {
+.tip-item.time-tip {
+    background: linear-gradient(135deg, rgba(255, 213, 128, 0.2) 0%, rgba(255, 213, 128, 0.1) 100%);
+}
+
+.tip-item.warning-tip {
+    background: linear-gradient(135deg, rgba(255, 182, 193, 0.2) 0%, rgba(255, 218, 185, 0.15) 100%);
+}
+
+.tip-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+.tip-text {
     color: var(--text-secondary);
     font-weight: 500;
+    line-height: 1.4;
+}
+
+.tip-text strong {
+    color: var(--text-primary);
+}
+
+.tip-sub {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 400;
 }
 </style>
 
