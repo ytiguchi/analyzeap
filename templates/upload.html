@@ -16,34 +16,42 @@
     <div class="card animate-in" style="margin-bottom: 2rem; border: 3px solid var(--accent-mint); background: linear-gradient(135deg, rgba(157, 196, 176, 0.15) 0%, rgba(157, 196, 176, 0.05) 100%);">
         <div style="text-align: center; padding: 1.5rem 1rem;">
             <div style="font-size: 3rem; margin-bottom: 0.5rem;">📊</div>
-            <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem; color: var(--text-primary);">売上データを更新</h3>
-            <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 1.5rem;">
-                ボタンを押すだけで最新の売上データを取得します
-            </p>
+            <h3 style="font-size: 1.3rem; margin-bottom: 1rem; color: var(--text-primary);">売上データを更新</h3>
             
-            <div class="ga4-fetch-buttons" style="justify-content: center; flex-direction: column; align-items: center; gap: 1rem;">
-                <form method="POST" action="{{ url_for('fetch_ga4') }}">
-                    <input type="hidden" name="period_type" value="weekly">
-                    <button type="submit" class="btn btn-primary" style="padding: 1.2rem 3rem; font-size: 1.2rem;">
-                        📆 過去7日間のデータを取得
-                    </button>
-                </form>
-                <p style="color: var(--accent-mint); font-size: 0.85rem; margin: 0;">
-                    ↑ こちらがおすすめ！正確なデータが取れます
-                </p>
+            <!-- 期間選択 -->
+            <div class="period-selector">
+                <div class="period-option" onclick="selectPeriod('3days')">
+                    <input type="radio" name="compare_period" id="period_3days" value="3days">
+                    <label for="period_3days">
+                        <span class="period-icon">📅</span>
+                        <span class="period-name">3日間</span>
+                        <span class="period-desc">直近3日 vs 前の3日</span>
+                    </label>
+                </div>
+                <div class="period-option selected" onclick="selectPeriod('weekly')">
+                    <input type="radio" name="compare_period" id="period_weekly" value="weekly" checked>
+                    <label for="period_weekly">
+                        <span class="period-icon">📆</span>
+                        <span class="period-name">週間</span>
+                        <span class="period-desc">過去7日 vs 前週</span>
+                    </label>
+                </div>
+                <div class="period-option" onclick="selectPeriod('yesterday')">
+                    <input type="radio" name="compare_period" id="period_yesterday" value="yesterday">
+                    <label for="period_yesterday">
+                        <span class="period-icon">🕐</span>
+                        <span class="period-name">前日</span>
+                        <span class="period-desc">昨日 vs 一昨日</span>
+                    </label>
+                </div>
             </div>
             
-            <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
-                    午後以降なら前日データも参考になります
-                </p>
-                <form method="POST" action="{{ url_for('fetch_ga4') }}">
-                    <input type="hidden" name="period_type" value="yesterday">
-                    <button type="submit" class="btn btn-secondary" style="padding: 0.75rem 1.5rem; font-size: 0.9rem;">
-                        📅 昨日のデータを取得
-                    </button>
-                </form>
-            </div>
+            <form id="fetchForm" method="POST" action="{{ url_for('fetch_ga4') }}" style="margin-top: 1.5rem;">
+                <input type="hidden" name="period_type" id="period_type_input" value="weekly">
+                <button type="submit" class="btn btn-primary" style="padding: 1rem 2.5rem; font-size: 1.1rem;">
+                    🔄 データを取得して比較
+                </button>
+            </form>
         </div>
     </div>
     {% endif %}
@@ -109,12 +117,6 @@ details[open] > summary::before {
     transform: rotate(90deg);
 }
 
-.ga4-fetch-buttons {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
 .file-upload {
     border: 2px dashed var(--border-color);
     border-radius: 16px;
@@ -139,5 +141,78 @@ details[open] > summary::before {
     margin: 0;
     font-weight: 500;
 }
+
+/* 期間セレクター */
+.period-selector {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.period-option {
+    flex: 1;
+    min-width: 140px;
+    max-width: 180px;
+}
+
+.period-option input[type="radio"] {
+    display: none;
+}
+
+.period-option label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 1rem 0.75rem;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.period-option:hover label {
+    border-color: var(--accent-lavender);
+    background: rgba(199, 173, 214, 0.1);
+}
+
+.period-option.selected label {
+    border-color: var(--accent-mint);
+    background: linear-gradient(135deg, rgba(157, 196, 176, 0.2) 0%, rgba(157, 196, 176, 0.1) 100%);
+    box-shadow: 0 4px 15px rgba(157, 196, 176, 0.3);
+}
+
+.period-icon {
+    font-size: 1.5rem;
+}
+
+.period-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.period-desc {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: center;
+}
 </style>
+
+<script>
+function selectPeriod(period) {
+    // ラジオボタンを更新
+    document.querySelectorAll('.period-option input[type="radio"]').forEach(r => r.checked = false);
+    document.getElementById('period_' + period).checked = true;
+    
+    // 選択状態のクラスを更新
+    document.querySelectorAll('.period-option').forEach(opt => opt.classList.remove('selected'));
+    event.currentTarget.classList.add('selected');
+    
+    // フォームの値を更新
+    document.getElementById('period_type_input').value = period;
+}
+</script>
 {% endblock %}

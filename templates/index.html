@@ -111,73 +111,91 @@
         {% endfor %}
     </section>
 
-    <!-- ブランド別サマリー -->
+    <!-- ブランド別パフォーマンス -->
     <section class="section">
         <div class="section-header">
             <h2 class="section-title">
-                <span class="icon">🏷️</span>
-                ブランド別サマリー
+                <span class="icon">📊</span>
+                ブランド別パフォーマンス
             </h2>
         </div>
 
-        <div class="table-container animate-in">
-            <table>
-                <thead>
-                    <tr>
-                        <th>ブランド</th>
-                        <th>SKU数</th>
-                        <th>総在庫</th>
-                        <th>閲覧数</th>
-                        <th>購入数</th>
-                        <th>売上</th>
-                        <th>CVR</th>
-                        {# <th>問題商品</th> #}
-                        <th>機会損失</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for brand in summary %}
-                    <tr>
-                        <td style="font-family: 'Noto Sans JP', sans-serif; font-weight: 500;">
-                            {{ brand.brand or '(未設定)' }}
-                        </td>
-                        <td>{{ "{:,}".format(brand.sku_count|int) }}</td>
-                        <td>{{ "{:,}".format(brand.total_stock|int) }}</td>
-                        <td>{{ "{:,}".format(brand.total_views|int) }}</td>
-                        <td>{{ "{:,}".format(brand.total_purchases|int) }}</td>
-                        <td style="color: var(--accent-mint);">¥{{ "{:,.0f}".format(brand.total_revenue) }}</td>
-                        <td>{{ "%.2f"|format(brand.overall_cvr) }}%</td>
-                        {#
-                        <td>
-                            {% if brand.problem_count > 0 %}
-                                <span class="badge badge-danger">{{ brand.problem_count }}</span>
-                            {% else %}
-                                <span style="color: var(--text-muted);">0</span>
-                            {% endif %}
-                        </td>
-                        #}
-                        <td>
-                            {% if brand.opportunity_count > 0 %}
-                                <span class="badge badge-warning">{{ brand.opportunity_count }}</span>
-                            {% else %}
-                                <span style="color: var(--text-muted);">0</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="{{ url_for('brand_detail', brand_name=brand.brand or 'unknown') }}" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem;">
-                                詳細 →
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="brand-panels">
+            {% for brand in summary %}
+            <div class="brand-panel animate-in" style="animation-delay: {{ loop.index * 0.05 }}s;">
+                <!-- ブランドヘッダー -->
+                <div class="brand-panel-header">
+                    <div class="brand-icon">
+                        {% if brand.brand == 'Rady' %}👗
+                        {% elif brand.brand == 'cherimi' %}🌸
+                        {% elif brand.brand == 'michellMacaron' %}🎀
+                        {% elif brand.brand == 'SOLNI' %}💎
+                        {% else %}🏷️{% endif %}
+                    </div>
+                    <div class="brand-name">{{ brand.brand or '(未設定)' }}</div>
+                </div>
+                
+                <!-- 売上メイン -->
+                <div class="brand-revenue-section">
+                    <div class="revenue-current">
+                        <span class="revenue-label">売上</span>
+                        <span class="revenue-value">¥{{ "{:,.0f}".format(brand.total_revenue) }}</span>
+                    </div>
+                    {% if brand.delta_revenue is defined and brand.delta_revenue != 0 %}
+                    <div class="revenue-delta {% if brand.delta_revenue > 0 %}up{% else %}down{% endif %}">
+                        {% if brand.delta_revenue > 0 %}↑{% else %}↓{% endif %}
+                        ¥{{ "{:,.0f}".format(brand.delta_revenue|abs) }}
+                        <span class="delta-pct">({{ "{:+.1f}".format(brand.delta_revenue_pct or 0) }}%)</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- KPIグリッド -->
+                <div class="brand-kpi-grid">
+                    <div class="kpi-item">
+                        <span class="kpi-value pv">{{ "{:,}".format(brand.total_views|int) }}</span>
+                        <span class="kpi-label">PV</span>
+                    </div>
+                    <div class="kpi-item">
+                        <span class="kpi-value">{{ "{:,}".format(brand.total_add_to_cart|int) }}</span>
+                        <span class="kpi-label">カート追加</span>
+                    </div>
+                    <div class="kpi-item">
+                        <span class="kpi-value">{{ "{:,}".format(brand.total_purchases|int) }}</span>
+                        <span class="kpi-label">購入</span>
+                    </div>
+                    <div class="kpi-item">
+                        <span class="kpi-value cvr {% if brand.overall_cvr >= 1 %}high{% endif %}">{{ "%.2f"|format(brand.overall_cvr) }}%</span>
+                        <span class="kpi-label">CVR</span>
+                    </div>
+                </div>
+                
+                <!-- クイックリンク -->
+                <div class="brand-quick-links">
+                    <a href="{{ url_for('brand_detail', brand_name=brand.brand or 'unknown') }}?tab=pv" class="quick-link">
+                        <span class="quick-icon">🔥</span>
+                        <span>PV</span>
+                    </a>
+                    <a href="{{ url_for('brand_detail', brand_name=brand.brand or 'unknown') }}?tab=top" class="quick-link">
+                        <span class="quick-icon">🏆</span>
+                        <span>売上TOP</span>
+                    </a>
+                    <a href="{{ url_for('brand_detail', brand_name=brand.brand or 'unknown') }}?tab=opportunity" class="quick-link {% if brand.opportunity_count > 0 %}has-alert{% endif %}">
+                        <span class="quick-icon">💡</span>
+                        <span>機会損失</span>
+                        {% if brand.opportunity_count > 0 %}
+                        <span class="alert-badge">{{ brand.opportunity_count }}</span>
+                        {% endif %}
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
         </div>
     </section>
 
+    {# クイックアクションは不要なので削除
     <!-- クイックアクション -->
-    <section class="section">
+    <section class="section" style="display: none;">
         <div class="section-header">
             <h2 class="section-title">
                 <span class="icon">⚡</span>
@@ -193,8 +211,11 @@
                     閲覧数の多い人気商品
                 </p>
             </a>
+        </div>
+    </section>
+    #}
 
-            {# 在庫過多×低売上 - 設計見直し中のため一時的に非表示
+    {# 在庫過多×低売上 - 設計見直し中のため一時的に非表示
             <a href="{{ url_for('brand_detail', brand_name='all') }}?tab=problem" class="card animate-in delay-2" style="text-decoration: none;">
                 <div style="font-size: 2rem; margin-bottom: 0.75rem;">🚨</div>
                 <h3 style="color: var(--accent-coral); margin-bottom: 0.5rem; font-size: 1rem;">在庫過多×低売上</h3>
@@ -299,6 +320,187 @@
 .period-brand-chip .brand-name {
     font-weight: 600;
     text-transform: uppercase;
+}
+
+/* ====== ブランドパネル ====== */
+.brand-panels {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+    .brand-panels {
+        grid-template-columns: 1fr;
+    }
+}
+
+.brand-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-soft);
+}
+
+.brand-panel:hover {
+    border-color: var(--accent-pink);
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-4px);
+}
+
+.brand-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.brand-icon {
+    font-size: 1.75rem;
+}
+
+.brand-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'Noto Sans JP', sans-serif;
+}
+
+.brand-revenue-section {
+    background: linear-gradient(135deg, rgba(157, 196, 176, 0.15) 0%, rgba(157, 196, 176, 0.05) 100%);
+    border-radius: 16px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.revenue-current {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.revenue-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.revenue-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--accent-mint);
+    font-family: 'DM Sans', sans-serif;
+}
+
+.revenue-delta {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+}
+
+.revenue-delta.up {
+    color: #2E7D32;
+}
+
+.revenue-delta.down {
+    color: #C62828;
+}
+
+.delta-pct {
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+.brand-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.kpi-item {
+    text-align: center;
+    padding: 0.5rem 0.25rem;
+}
+
+.kpi-value {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+}
+
+.kpi-value.pv {
+    color: var(--accent-orange);
+}
+
+.kpi-value.cvr.high {
+    color: var(--accent-mint);
+}
+
+.kpi-label {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-top: 0.2rem;
+    text-transform: uppercase;
+}
+
+.brand-quick-links {
+    display: flex;
+    gap: 0.5rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 1rem;
+}
+
+.quick-link {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.6rem 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.quick-link:hover {
+    background: linear-gradient(135deg, rgba(232, 164, 164, 0.2) 0%, rgba(199, 173, 214, 0.2) 100%);
+    color: var(--text-primary);
+    transform: translateY(-2px);
+}
+
+.quick-icon {
+    font-size: 1.1rem;
+}
+
+.quick-link.has-alert {
+    background: rgba(255, 217, 61, 0.15);
+}
+
+.alert-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--accent-coral);
+    color: white;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
 }
 
 /* PVランキング */

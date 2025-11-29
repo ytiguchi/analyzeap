@@ -183,6 +183,63 @@ def fetch_comparison_data(brand: str) -> dict:
     return result
 
 
+def fetch_3days_data(brand: str) -> dict:
+    """直近3日間のデータを取得"""
+    end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    start_date = (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d')
+    df = fetch_ecommerce_data(brand, start_date, end_date)
+    
+    if df is not None:
+        return {
+            'data': df,
+            'period': {
+                'start_date': datetime.strptime(start_date, '%Y-%m-%d'),
+                'end_date': datetime.strptime(end_date, '%Y-%m-%d'),
+                'days': 3,
+                'period_type': '3days'
+            }
+        }
+    return None
+
+
+def fetch_previous_3days_data(brand: str) -> dict:
+    """前の3日間のデータを取得（4日前〜6日前）"""
+    end_date = (datetime.now() - timedelta(days=4)).strftime('%Y-%m-%d')
+    start_date = (datetime.now() - timedelta(days=6)).strftime('%Y-%m-%d')
+    df = fetch_ecommerce_data(brand, start_date, end_date)
+    
+    if df is not None:
+        return {
+            'data': df,
+            'period': {
+                'start_date': datetime.strptime(start_date, '%Y-%m-%d'),
+                'end_date': datetime.strptime(end_date, '%Y-%m-%d'),
+                'days': 3,
+                'period_type': '3days'
+            }
+        }
+    return None
+
+
+def fetch_previous_weekly_data(brand: str) -> dict:
+    """前週のデータを取得（8日前〜14日前）"""
+    end_date = (datetime.now() - timedelta(days=8)).strftime('%Y-%m-%d')
+    start_date = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%d')
+    df = fetch_ecommerce_data(brand, start_date, end_date)
+    
+    if df is not None:
+        return {
+            'data': df,
+            'period': {
+                'start_date': datetime.strptime(start_date, '%Y-%m-%d'),
+                'end_date': datetime.strptime(end_date, '%Y-%m-%d'),
+                'days': 7,
+                'period_type': 'weekly'
+            }
+        }
+    return None
+
+
 def fetch_weekly_data(brand: str) -> dict:
     """過去7日間のデータを取得"""
     end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -223,12 +280,12 @@ def fetch_custom_data(brand: str, start_date: str, end_date: str) -> dict:
     return None
 
 
-def fetch_all_brands_data(period_type: str = 'yesterday') -> dict:
+def fetch_all_brands_data(period_type: str = 'weekly') -> dict:
     """
     全ブランドのデータを取得
     
     Args:
-        period_type: 'yesterday' or 'weekly'
+        period_type: 'yesterday', 'weekly', or '3days'
     
     Returns:
         dict: {brand: {'data': df, 'period': {...}}, ...}
@@ -243,7 +300,9 @@ def fetch_all_brands_data(period_type: str = 'yesterday') -> dict:
         
         if period_type == 'yesterday':
             result = fetch_yesterday_data(brand)
-        else:
+        elif period_type == '3days':
+            result = fetch_3days_data(brand)
+        else:  # weekly
             result = fetch_weekly_data(brand)
         
         if result is not None:

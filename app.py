@@ -390,7 +390,7 @@ def merge_and_analyze():
 
 
 def get_brand_summary():
-    """ブランド別サマリーを取得"""
+    """ブランド別サマリーを取得（前期間比較付き）"""
     df = data_store['merged_data']
     if df is None:
         return None
@@ -398,7 +398,8 @@ def get_brand_summary():
     # Regalectを除外
     df = df[df['brand'] != 'Regalect']
     
-    summary = df.groupby('brand').agg({
+    # 集計カラムの準備
+    agg_dict = {
         'sku_id': 'count',
         'total_stock': 'sum',
         'views': 'sum',
@@ -407,16 +408,37 @@ def get_brand_summary():
         'revenue': 'sum',
         'is_problem': 'sum',
         'is_opportunity': 'sum',
-    }).reset_index()
+    }
     
-    summary.columns = ['brand', 'sku_count', 'total_stock', 'total_views', 
-                       'total_cart', 'total_purchases', 'total_revenue',
-                       'problem_count', 'opportunity_count']
+    # 前期間データがあれば追加
+    has_prev = 'prev_revenue' in df.columns
+    if has_prev:
+        agg_dict['prev_revenue'] = 'sum'
+        agg_dict['prev_views'] = 'sum'
+        agg_dict['prev_purchases'] = 'sum'
+    
+    summary = df.groupby('brand').agg(agg_dict).reset_index()
+    
+    # カラム名を変更
+    base_cols = ['brand', 'sku_count', 'total_stock', 'total_views', 
+                 'total_add_to_cart', 'total_purchases', 'total_revenue',
+                 'problem_count', 'opportunity_count']
+    if has_prev:
+        base_cols.extend(['prev_total_revenue', 'prev_total_views', 'prev_total_purchases'])
+    summary.columns = base_cols
     
     # CVR計算
     summary['overall_cvr'] = summary.apply(
         lambda x: (x['total_purchases'] / x['total_views'] * 100) if x['total_views'] > 0 else 0, axis=1
     )
+    
+    # デルタ計算（前期間データがある場合）
+    if has_prev:
+        summary['delta_revenue'] = summary['total_revenue'] - summary['prev_total_revenue']
+        summary['delta_revenue_pct'] = summary.apply(
+            lambda x: ((x['total_revenue'] - x['prev_total_revenue']) / x['prev_total_revenue'] * 100) 
+                      if x['prev_total_revenue'] > 0 else 0, axis=1
+        )
     
     return summary.to_dict('records')
 
@@ -779,7 +801,7 @@ def fetch_ga4():
         flash('GA4 APIが設定されていません', 'error')
         return redirect(url_for('upload'))
     
-    period_type = request.form.get('period_type', 'yesterday')  # 'yesterday' or 'weekly'
+    period_type = request.form.get('period_type', 'weekly')  # 'yesterday', 'weekly', or '3days'
     
     try:
         # 現在期間のデータを取得
@@ -803,14 +825,21 @@ def fetch_ga4():
                 save_ga4_data(brand, result['data'], start_str, end_str)
         
         # 前期間データも取得（比較用）
-        if period_type == 'yesterday':
-            # 前日データなら前々日も取得
-            from ga4_api import fetch_day_before_yesterday_data
-            for brand in results.keys():
+        from ga4_api import fetch_day_before_yesterday_data, fetch_previous_3days_data, fetch_previous_weekly_data
+        
+        for brand in results.keys():
+            prev_result = None
+            if period_type == 'yesterday':
                 prev_result = fetch_day_before_yesterday_data(brand)
-                if prev_result:
-                    data_store['ga_sales_previous'][brand] = prev_result
-                    print(f"✅ Fetched previous day data for {brand}: {len(prev_result['data'])} items")
+            elif period_type == '3days':
+                prev_result = fetch_previous_3days_data(brand)
+            elif period_type == 'weekly':
+                prev_result = fetch_previous_weekly_data(brand)
+            
+            if prev_result:
+                data_store['ga_sales_previous'][brand] = prev_result
+                prev_period = prev_result['period']
+                print(f"✅ Fetched previous period data for {brand}: {len(prev_result['data'])} items ({prev_period['start_date'].strftime('%m/%d')}〜{prev_period['end_date'].strftime('%m/%d')})")
         
         # 商品マスタがあれば分析実行
         if data_store['product_master'] is not None:
