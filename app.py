@@ -458,9 +458,7 @@ def get_pv_ranking(brand=None, limit=50):
     grouped = grouped[grouped['product_class_id'].isin(products_with_views)]
     
     # CVR（PVに対する購入率）= 購入数 / PV * 100
-    grouped['cvr'] = grouped.apply(
-        lambda x: float(x['purchases']) / float(x['views']) * 100 if float(x['views']) > 0 else 0.0, axis=1
-    )
+    grouped['cvr'] = (grouped['purchases'].astype(float) / grouped['views'].astype(float) * 100).fillna(0)
     grouped['purchase_rate'] = grouped['cvr']
     
     grouped = grouped.sort_values('views', ascending=False).head(limit)
@@ -469,6 +467,8 @@ def get_pv_ranking(brand=None, limit=50):
     result = []
     for _, row in grouped.iterrows():
         product = row.to_dict()
+        # CVRを確実にfloatで保持
+        product['cvr'] = float(product.get('cvr', 0) or 0)
         
         # このproduct_class_idに属する全SKUを取得（元データから）
         skus = df[df['product_class_id'] == row['product_class_id']].copy()
