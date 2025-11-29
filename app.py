@@ -1324,6 +1324,15 @@ def fetch_ga4():
         # 商品マスタがあれば分析実行
         if data_store['product_master'] is not None:
             merge_and_analyze()
+            
+            # 期間別データにも保存（期間切り替え用）
+            data_store['periods_data'][period_type]['ga_sales'] = data_store['ga_sales'].copy()
+            data_store['periods_data'][period_type]['ga_sales_previous'] = data_store['ga_sales_previous'].copy()
+            data_store['periods_data'][period_type]['channel_data'] = data_store['channel_data'].copy()
+            data_store['periods_data'][period_type]['merged_data'] = data_store['merged_data']
+            data_store['periods_data'][period_type]['merged_data_previous'] = data_store['merged_data_previous']
+            data_store['current_period'] = period_type
+            
             flash('データの突合・分析が完了しました！', 'success')
             return redirect(url_for('index'))
         
