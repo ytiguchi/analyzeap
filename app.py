@@ -391,11 +391,26 @@ def get_analysis_period():
 def switch_period_data(period_type):
     """
     指定した期間のデータをメインストアにコピー
+    merged_dataがない場合は分析を実行
     """
     if period_type not in data_store['periods_data']:
         return False
     
     period_data = data_store['periods_data'][period_type]
+    
+    # merged_dataがない場合は分析を実行
+    if period_data['merged_data'] is None and period_data['ga_sales']:
+        print(f"[INFO] Analyzing {period_type} on switch...")
+        # 一時的にメインストアにセット
+        data_store['ga_sales'] = period_data['ga_sales'].copy()
+        data_store['ga_sales_previous'] = period_data['ga_sales_previous'].copy()
+        data_store['current_period'] = period_type
+        # 分析実行
+        merge_and_analyze()
+        # 結果を保存
+        period_data['merged_data'] = data_store['merged_data']
+        period_data['merged_data_previous'] = data_store['merged_data_previous']
+        print(f"[OK] Analyzed {period_type}")
     
     # メインストアにコピー
     data_store['ga_sales'] = period_data['ga_sales'].copy()
@@ -1733,20 +1748,25 @@ def init_from_r2():
                         loaded_periods.append(period_type)
                         print(f"  [OK] Loaded {period_type}: {len(period_ga_sales)} brands")
                 
-                # 読み込んだ期間がある場合、最初の期間をメインにセット
+                # 読み込んだ期間全てに対して分析を実行
                 if loaded_periods:
+                    for period_type in loaded_periods:
+                        # 期間データをメインストアにセット
+                        data_store['ga_sales'] = data_store['periods_data'][period_type]['ga_sales'].copy()
+                        data_store['ga_sales_previous'] = data_store['periods_data'][period_type]['ga_sales_previous'].copy()
+                        data_store['current_period'] = period_type
+                        
+                        # 分析実行
+                        merge_and_analyze()
+                        
+                        # 分析結果を期間データに保存
+                        data_store['periods_data'][period_type]['merged_data'] = data_store['merged_data']
+                        data_store['periods_data'][period_type]['merged_data_previous'] = data_store['merged_data_previous']
+                        print(f"  [OK] Analyzed {period_type}")
+                    
+                    # 最初の期間をデフォルトにセット
                     default_period = loaded_periods[0]
-                    data_store['ga_sales'] = data_store['periods_data'][default_period]['ga_sales'].copy()
-                    data_store['ga_sales_previous'] = data_store['periods_data'][default_period]['ga_sales_previous'].copy()
-                    data_store['current_period'] = default_period
-                    
-                    # 分析実行
-                    merge_and_analyze()
-                    
-                    # 分析結果を期間データに保存
-                    data_store['periods_data'][default_period]['merged_data'] = data_store['merged_data']
-                    data_store['periods_data'][default_period]['merged_data_previous'] = data_store['merged_data_previous']
-                    
+                    switch_period_data(default_period)
                     print(f"[OK] Initialized with {default_period} data")
             
             # 旧方式のフォールバック（期間データがない場合）

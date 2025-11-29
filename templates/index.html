@@ -23,81 +23,42 @@
         {% endif %}
     </div>
 {% else %}
-    <!-- 期間切り替えタブ -->
-    <div class="period-tabs animate-in">
-        <div class="period-tabs-label">📅 期間:</div>
-        <div class="period-tabs-buttons">
-            <a href="{{ url_for('switch_period', period_type='yesterday') }}" 
-               class="period-tab {% if current_period == 'yesterday' %}active{% endif %} {% if 'yesterday' not in available_periods %}disabled{% endif %}"
-               {% if 'yesterday' not in available_periods %}title="毎日12時に自動取得されます"{% endif %}>
-                <span>🕐</span><span>前日</span>
-            </a>
-            <a href="{{ url_for('switch_period', period_type='3days') }}" 
-               class="period-tab {% if current_period == '3days' %}active{% endif %} {% if '3days' not in available_periods %}disabled{% endif %}"
-               {% if '3days' not in available_periods %}title="毎日12時に自動取得されます"{% endif %}>
-                <span>📊</span><span>3日間</span>
-            </a>
-            <a href="{{ url_for('switch_period', period_type='weekly') }}" 
-               class="period-tab {% if current_period == 'weekly' %}active{% endif %} {% if 'weekly' not in available_periods %}disabled{% endif %}"
-               {% if 'weekly' not in available_periods %}title="毎日12時に自動取得されます"{% endif %}>
-                <span>📆</span><span>週間</span>
-            </a>
-        </div>
-        {% if available_periods|length == 1 %}
-        <span class="period-hint">💡 毎日12時に全期間が自動更新されます</span>
-        {% endif %}
-        {% if is_admin %}
-        <a href="{{ url_for('upload') }}" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.75rem; margin-left: auto;">
-            🔄 手動更新
-        </a>
-        {% endif %}
-    </div>
-
-    <!-- 分析期間バナー -->
-    {% if analysis_period %}
-    <div class="period-banner animate-in" style="animation-delay: 0.05s;">
-        <div class="period-banner-icon">📊</div>
-        <div class="period-banner-content">
-            <div class="period-banner-title">
-                {% if current_period == 'yesterday' %}前日データ
-                {% elif current_period == '3days' %}3日間データ
-                {% elif current_period == 'weekly' %}週間データ
-                {% else %}分析期間{% endif %}
-            </div>
-            <div class="period-banner-dates">
-                {% if analysis_period.min_start and analysis_period.max_end %}
-                    {{ analysis_period.min_start.strftime('%Y年%m月%d日') }}
-                    {% if analysis_period.min_start != analysis_period.max_end %}
-                        〜 {{ analysis_period.max_end.strftime('%m月%d日') }}
+    <!-- ブランド別パフォーマンス（メインコンテンツ） -->
+    <section class="section">
+        <!-- ヘッダー：タイトル＋期間情報＋切り替え -->
+        <div class="section-header-combined animate-in">
+            <div class="header-main">
+                <h2 class="section-title">
+                    <span class="icon">📊</span>
+                    ブランド別パフォーマンス
+                </h2>
+                {% if analysis_period %}
+                <div class="period-info-inline">
+                    <span class="period-date">
+                        {% if analysis_period.min_start %}
+                        {{ analysis_period.min_start.strftime('%m/%d') }}
+                        {% if analysis_period.min_start != analysis_period.max_end %}〜{{ analysis_period.max_end.strftime('%m/%d') }}{% endif %}
+                        {% endif %}
+                    </span>
+                    {% if analysis_period.prev_start %}
+                    <span class="period-vs">vs {{ analysis_period.prev_start.strftime('%m/%d') }}〜{{ analysis_period.prev_end.strftime('%m/%d') }}</span>
                     {% endif %}
-                    <span class="period-days">（{{ analysis_period.total_days }}日間）</span>
-                {% else %}
-                    期間情報なし
+                </div>
                 {% endif %}
             </div>
-            {% if analysis_period.prev_start and analysis_period.prev_end %}
-            <div class="period-comparison">
-                🔄 比較: {{ analysis_period.prev_start.strftime('%m/%d') }}〜{{ analysis_period.prev_end.strftime('%m/%d') }}
+            <div class="header-controls">
+                <div class="period-pills">
+                    <a href="{{ url_for('switch_period', period_type='yesterday') }}" 
+                       class="period-pill {% if current_period == 'yesterday' %}active{% endif %} {% if 'yesterday' not in available_periods %}disabled{% endif %}">前日</a>
+                    <a href="{{ url_for('switch_period', period_type='3days') }}" 
+                       class="period-pill {% if current_period == '3days' %}active{% endif %} {% if '3days' not in available_periods %}disabled{% endif %}">3日</a>
+                    <a href="{{ url_for('switch_period', period_type='weekly') }}" 
+                       class="period-pill {% if current_period == 'weekly' %}active{% endif %} {% if 'weekly' not in available_periods %}disabled{% endif %}">週間</a>
+                </div>
+                {% if is_admin %}
+                <a href="{{ url_for('upload') }}" class="btn-mini">🔄</a>
+                {% endif %}
             </div>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
-
-    {# PVランキングは一時的にコメントアウト - ブランド別パフォーマンスパネルに統合
-    <!-- PVランキング（ブランド別） -->
-    <section class="section">
-        ...
-    </section>
-    #}
-
-    <!-- ブランド別パフォーマンス -->
-    <section class="section">
-        <div class="section-header">
-            <h2 class="section-title">
-                <span class="icon">📊</span>
-                ブランド別パフォーマンス
-            </h2>
         </div>
 
         <div class="brand-panels">
@@ -215,8 +176,101 @@
 {% endif %}
 
 <style>
-/* 分析期間バナー */
-/* 期間切り替えタブ */
+/* コンパクトヘッダー */
+.section-header-combined {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.header-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.period-info-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-left: 2rem;
+}
+
+.period-date {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.period-vs {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.period-pills {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--bg-secondary);
+    border-radius: 20px;
+    padding: 0.2rem;
+    border: 1px solid var(--border-color);
+}
+
+.period-pill {
+    padding: 0.35rem 0.75rem;
+    border-radius: 16px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.period-pill:hover {
+    background: rgba(232, 164, 164, 0.2);
+    color: var(--text-primary);
+}
+
+.period-pill.active {
+    background: var(--accent-pink);
+    color: white;
+}
+
+.period-pill.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.btn-mini {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.btn-mini:hover {
+    background: var(--accent-pink);
+    border-color: var(--accent-pink);
+}
+
+/* 旧スタイル（互換用） */
 .period-tabs {
     display: flex;
     align-items: center;
