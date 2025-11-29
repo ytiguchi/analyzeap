@@ -40,76 +40,12 @@
     </div>
     {% endif %}
 
+    {# PVランキングは一時的にコメントアウト - ブランド別パフォーマンスパネルに統合
     <!-- PVランキング（ブランド別） -->
     <section class="section">
-        <div class="section-header">
-            <h2 class="section-title">
-                <span class="icon">🔥</span>
-                PVランキング
-            </h2>
-        </div>
-
-        <!-- ブランドタブ -->
-        <div class="brand-tabs">
-            {% for brand_name in pv_ranking_by_brand.keys() %}
-            <button class="brand-tab {% if loop.first %}active{% endif %}" 
-                    onclick="switchBrandTab('{{ brand_name }}')"
-                    data-brand="{{ brand_name }}">
-                {% if brand_name == 'Rady' %}👗
-                {% elif brand_name == 'cherimi' %}🌸
-                {% elif brand_name == 'michellMacaron' %}🎀
-                {% elif brand_name == 'SOLNI' %}💎
-                {% else %}🏷️
-                {% endif %}
-                {{ brand_name }}
-            </button>
-            {% endfor %}
-        </div>
-
-        <!-- ブランド別コンテンツ -->
-        {% for brand_name, products in pv_ranking_by_brand.items() %}
-        <div class="brand-pv-content {% if loop.first %}active{% endif %}" id="pv-{{ brand_name }}">
-            <div class="pv-grid">
-                {% for p in products %}
-                <div class="pv-card animate-in" style="animation-delay: {{ loop.index * 0.02 }}s;">
-                    <div class="pv-card-rank {% if loop.index <= 3 %}top-rank{% endif %}">{{ loop.index }}</div>
-                    <a href="{{ p.product_url or '#' }}" target="_blank" rel="noopener" class="pv-card-link">
-                        <img src="{{ p.image_url or 'https://via.placeholder.com/120x120?text=No+Image' }}" 
-                             alt="{{ p.product_name }}" 
-                             class="pv-card-image"
-                             onerror="this.src='https://via.placeholder.com/120x120?text=No+Image'">
-                    </a>
-                    <div class="pv-card-info">
-                        <div class="pv-card-name">{{ p.product_name }}</div>
-                        <div class="pv-card-metrics">
-                            <div class="metric">
-                                <span class="metric-value pv-value">{{ "{:,}".format(p.views|int) }}</span>
-                                <span class="metric-label">PV</span>
-                            </div>
-                            <div class="metric">
-                                <span class="metric-value {% if (p.cvr or 0) >= 1 %}high-cvr{% endif %}">{{ "%.2f"|format(p.cvr or 0) }}%</span>
-                                <span class="metric-label">CVR</span>
-                            </div>
-                            <div class="metric">
-                                <span class="metric-value {% if (p.purchases or 0) > 0 %}has-purchase{% endif %}">{{ p.purchases|int }}</span>
-                                <span class="metric-label">購入</span>
-                            </div>
-                            <div class="metric">
-                                <span class="metric-value {% if (p.total_stock or 0) <= 10 %}low-stock{% endif %}">{{ p.total_stock|int }}</span>
-                                <span class="metric-label">在庫</span>
-                            </div>
-                            <div class="metric revenue-metric">
-                                <span class="metric-value revenue-value">¥{{ "{:,.0f}".format(p.revenue or 0) }}</span>
-                                <span class="metric-label">売上</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
+        ...
     </section>
+    #}
 
     <!-- ブランド別パフォーマンス -->
     <section class="section">
