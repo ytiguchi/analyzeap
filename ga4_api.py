@@ -52,7 +52,7 @@ def get_ga4_client():
     config = get_ga4_config()
     
     if not config['credentials_json']:
-        print("❌ GA4_CREDENTIALS_JSON not set")
+        print("[ERROR] GA4_CREDENTIALS_JSON not set")
         return None
     
     try:
@@ -64,7 +64,7 @@ def get_ga4_client():
         client = BetaAnalyticsDataClient(credentials=credentials)
         return client
     except Exception as e:
-        print(f"❌ Error creating GA4 client: {e}")
+        print(f"[ERROR] Error creating GA4 client: {e}")
         return None
 
 
@@ -88,7 +88,7 @@ def fetch_ecommerce_data(brand: str, start_date: str, end_date: str) -> pd.DataF
     property_id = config['properties'].get(brand, '')
     
     if not property_id:
-        print(f"❌ GA4 property ID not set for brand: {brand}")
+        print(f"[ERROR] GA4 property ID not set for brand: {brand}")
         return None
     
     try:
@@ -122,11 +122,11 @@ def fetch_ecommerce_data(brand: str, start_date: str, end_date: str) -> pd.DataF
             })
         
         df = pd.DataFrame(rows)
-        print(f"✅ Fetched {len(df)} items from GA4 for {brand} ({start_date} to {end_date})")
+        print(f"[OK] Fetched {len(df)} items from GA4 for {brand}")
         return df
     
     except Exception as e:
-        print(f"❌ Error fetching GA4 data for {brand}: {e}")
+        print(f"[ERROR] Error fetching GA4 data for {brand}: {e}")
         return None
 
 
@@ -295,7 +295,7 @@ def fetch_all_brands_data(period_type: str = 'weekly') -> dict:
     
     for brand, prop_id in config['properties'].items():
         if not prop_id:
-            print(f"⚠️ Skipping {brand} - no property ID configured")
+            print(f"[WARN] Skipping {brand} - no property ID configured")
             continue
         
         if period_type == 'yesterday':
@@ -323,7 +323,7 @@ def fetch_channel_data(brand: str, start_date: str, end_date: str) -> pd.DataFra
     property_id = config['properties'].get(brand, '')
     
     if not property_id:
-        print(f"❌ GA4 property ID not set for brand: {brand}")
+        print(f"[ERROR] GA4 property ID not set for brand: {brand}")
         return None
     
     try:
@@ -357,11 +357,11 @@ def fetch_channel_data(brand: str, start_date: str, end_date: str) -> pd.DataFra
             })
         
         df = pd.DataFrame(rows)
-        print(f"✅ Fetched channel data for {brand}: {len(df)} sources")
+        print(f"[OK] Fetched channel data for {brand}: {len(df)} sources")
         return df
     
     except Exception as e:
-        print(f"❌ Error fetching channel data for {brand}: {e}")
+        print(f"[ERROR] Error fetching channel data for {brand}: {e}")
         return None
 
 

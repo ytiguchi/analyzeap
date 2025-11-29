@@ -119,6 +119,15 @@
             background: var(--gradient-warm);
         }
 
+        .nav-links a.nav-logout {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .nav-links a.nav-logout:hover {
+            color: var(--accent-rose);
+        }
+
         /* メインコンテンツ */
         .main {
             max-width: 1400px;
@@ -563,7 +572,11 @@
             <a href="{{ url_for('index') }}" class="nav-logo">商品分析</a>
             <div class="nav-links">
                 <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">📊 ダッシュボード</a>
+                {% if session.get('is_admin') %}
                 <a href="{{ url_for('upload') }}" class="{% if request.endpoint == 'upload' %}active{% endif %}">🔄 データ更新</a>
+                <a href="{{ url_for('admin_passwords') }}" class="{% if request.endpoint == 'admin_passwords' %}active{% endif %}">🔐 パスワード</a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}" class="nav-logout">ログアウト</a>
             </div>
         </div>
     </nav>

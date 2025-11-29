@@ -18,8 +18,77 @@ from functools import wraps
 import pandas as pd
 from werkzeug.utils import secure_filename
 
-# シンプル認証
-SITE_PASSWORD = os.environ.get('SITE_PASSWORD', '898989')
+# ============================================
+# パスワード管理システム
+# ============================================
+# メモリ上のパスワードキャッシュ
+password_cache = {
+    'admin': None,
+    'brands': {}
+}
+
+def get_default_passwords():
+    """環境変数から初期パスワードを取得"""
+    return {
+        'admin': os.environ.get('ADMIN_PASSWORD', 'admin898989'),
+        'brands': {
+            'rady': os.environ.get('BRAND_PASSWORD_RADY', 'rady2025'),
+            'cherimi': os.environ.get('BRAND_PASSWORD_CHERIMI', 'cherimi2025'),
+            'michellmacaron': os.environ.get('BRAND_PASSWORD_MICHELLMACARON', 'mm2025'),
+            'solni': os.environ.get('BRAND_PASSWORD_SOLNI', 'solni2025'),
+        }
+    }
+
+def init_passwords():
+    """パスワードを初期化（R2から読み込み、なければ環境変数から）"""
+    global password_cache
+    
+    # R2から読み込みを試行
+    if r2_load_passwords:
+        r2_passwords = r2_load_passwords()
+        if r2_passwords:
+            password_cache = r2_passwords
+            print("[OK] Loaded passwords from R2")
+            return
+    
+    # 環境変数から初期値を設定
+    password_cache = get_default_passwords()
+    print("[OK] Initialized passwords from environment variables")
+
+def check_password(entered_password):
+    """
+    パスワードをチェックし、アクセス可能なブランドを返す
+    Returns: {'is_admin': bool, 'brands': list} or None
+    """
+    global password_cache
+    
+    # 管理者パスワードチェック
+    if entered_password == password_cache.get('admin'):
+        return {'is_admin': True, 'brands': BRANDS}
+    
+    # ブランドパスワードチェック
+    for brand, pwd in password_cache.get('brands', {}).items():
+        if entered_password == pwd:
+            return {'is_admin': False, 'brands': [brand]}
+    
+    return None
+
+def update_password(password_type, brand_key=None, new_password=None):
+    """パスワードを更新（R2にも保存）"""
+    global password_cache
+    
+    if password_type == 'admin':
+        password_cache['admin'] = new_password
+    elif password_type == 'brand' and brand_key:
+        if 'brands' not in password_cache:
+            password_cache['brands'] = {}
+        password_cache['brands'][brand_key.lower()] = new_password
+    
+    # R2に保存
+    if r2_save_passwords:
+        r2_save_passwords(password_cache)
+    
+    return True
 
 def login_required(f):
     @wraps(f)
@@ -29,9 +98,34 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def admin_required(f):
+    """管理者専用デコレータ"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('login'))
+        if not session.get('is_admin'):
+            flash('この機能は管理者のみ利用可能です', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def can_access_brand(brand_name):
+    """現在のセッションで指定ブランドにアクセス可能か"""
+    if session.get('is_admin'):
+        return True
+    accessible = session.get('accessible_brands', [])
+    # ブランド名の正規化（大文字小文字無視）
+    brand_lower = brand_name.lower()
+    return any(b.lower() == brand_lower for b in accessible)
+
 # R2ストレージ連携
 try:
-    from storage import download_product_master, upload_product_master, get_product_master_info, is_r2_enabled, save_ga4_data, get_latest_ga4_data
+    from storage import (
+        download_product_master, upload_product_master, get_product_master_info, 
+        is_r2_enabled, save_ga4_data, get_latest_ga4_data,
+        save_passwords as r2_save_passwords, load_passwords as r2_load_passwords
+    )
 except ImportError:
     is_r2_enabled = lambda: False
     download_product_master = None
@@ -39,6 +133,8 @@ except ImportError:
     get_latest_ga4_data = None
     upload_product_master = None
     get_product_master_info = None
+    r2_save_passwords = None
+    r2_load_passwords = None
 
 # GA4 API連携
 try:
@@ -384,7 +480,7 @@ def merge_and_analyze():
             )
             merged['delta_cvr'] = merged['cvr'] - merged['prev_cvr']
             
-            print(f"✅ Calculated deltas for {len(merged)} items")
+            print(f"[OK] Calculated deltas for {len(merged)} items")
     
     data_store['merged_data'] = merged
     return merged
@@ -869,8 +965,19 @@ def login():
     """ログイン画面"""
     if request.method == 'POST':
         password = request.form.get('password', '')
-        if password == SITE_PASSWORD:
+        result = check_password(password)
+        
+        if result:
             session['logged_in'] = True
+            session['is_admin'] = result['is_admin']
+            session['accessible_brands'] = result['brands']
+            
+            if result['is_admin']:
+                flash('管理者としてログインしました', 'success')
+            else:
+                brand_names = ', '.join(result['brands'])
+                flash(f'{brand_names} にアクセス可能です', 'success')
+            
             return redirect(url_for('index'))
         else:
             flash('パスワードが違います', 'error')
@@ -881,6 +988,8 @@ def login():
 def logout():
     """ログアウト"""
     session.pop('logged_in', None)
+    session.pop('is_admin', None)
+    session.pop('accessible_brands', None)
     return redirect(url_for('login'))
 
 
@@ -891,14 +1000,37 @@ def index():
     has_data = data_store['merged_data'] is not None
     brands = []
     summary = None
-    pv_ranking = []
+    pv_ranking_by_brand = {}
     analysis_period = None
-    anomalies = {'rising': [], 'warning': []}
+    
+    # アクセス可能なブランドを取得
+    accessible_brands = session.get('accessible_brands', BRANDS)
+    is_admin = session.get('is_admin', False)
     
     if has_data:
-        brands = data_store['merged_data']['brand'].dropna().unique().tolist()
+        all_brands = data_store['merged_data']['brand'].dropna().unique().tolist()
+        
+        # アクセス可能なブランドのみフィルタ
+        if is_admin:
+            brands = all_brands
+        else:
+            brands = [b for b in all_brands if any(
+                b.lower() == ab.lower() for ab in accessible_brands
+            )]
+        
         summary = get_brand_summary()
+        # サマリーもフィルタ
+        if summary and not is_admin:
+            summary = [s for s in summary if any(
+                s['brand'].lower() == ab.lower() for ab in accessible_brands
+            )]
+        
         pv_ranking_by_brand = get_pv_ranking_by_brand(limit_per_brand=30)
+        # PVランキングもフィルタ
+        if not is_admin:
+            pv_ranking_by_brand = {k: v for k, v in pv_ranking_by_brand.items() 
+                                   if any(k.lower() == ab.lower() for ab in accessible_brands)}
+        
         analysis_period = get_analysis_period()
     
     return render_template('index.html', 
@@ -906,11 +1038,12 @@ def index():
                          brands=brands,
                          summary=summary,
                          pv_ranking_by_brand=pv_ranking_by_brand,
-                         analysis_period=analysis_period)
+                         analysis_period=analysis_period,
+                         is_admin=is_admin)
 
 
 @app.route('/upload', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def upload():
     """CSVアップロード画面"""
     if request.method == 'POST':
@@ -1056,16 +1189,16 @@ def fetch_ga4():
             if prev_result:
                 data_store['ga_sales_previous'][brand] = prev_result
                 prev_period = prev_result['period']
-                print(f"✅ Fetched previous period data for {brand}: {len(prev_result['data'])} items ({prev_period['start_date'].strftime('%m/%d')}〜{prev_period['end_date'].strftime('%m/%d')})")
+                print(f"[OK] Fetched previous period data for {brand}: {len(prev_result['data'])} items")
         
         # チャネルデータも取得
         try:
             channel_results = fetch_all_brands_channel_data(period_type)
             for brand, channel_df in channel_results.items():
                 data_store['channel_data'][brand] = channel_df
-                print(f"✅ Fetched channel data for {brand}: {len(channel_df)} channels")
+                print(f"[OK] Fetched channel data for {brand}: {len(channel_df)} channels")
         except Exception as e:
-            print(f"⚠️ Failed to fetch channel data: {e}")
+            print(f"[WARN] Failed to fetch channel data: {e}")
         
         # 商品マスタがあれば分析実行
         if data_store['product_master'] is not None:
@@ -1084,7 +1217,13 @@ def fetch_ga4():
 def brand_detail(brand_name):
     """ブランド別詳細"""
     if data_store['merged_data'] is None:
-        return redirect(url_for('upload'))
+        flash('データがありません。管理者にお問い合わせください。', 'error')
+        return redirect(url_for('index'))
+    
+    # アクセス権限チェック
+    if not can_access_brand(brand_name):
+        flash(f'{brand_name} へのアクセス権限がありません', 'error')
+        return redirect(url_for('index'))
     
     brand = brand_name if brand_name != 'all' else None
     
@@ -1119,8 +1258,18 @@ def brand_detail(brand_name):
         'opportunity_count': int(brand_df['is_opportunity'].sum()),
     }
     
-    brands = df['brand'].dropna().unique().tolist()
+    all_brands = df['brand'].dropna().unique().tolist()
     analysis_period = get_analysis_period()
+    
+    # アクセス可能なブランドのみ表示
+    is_admin = session.get('is_admin', False)
+    accessible_brands = session.get('accessible_brands', BRANDS)
+    if is_admin:
+        brands = all_brands
+    else:
+        brands = [b for b in all_brands if any(
+            b.lower() == ab.lower() for ab in accessible_brands
+        )]
     
     return render_template('brand_detail.html',
                          brand_name=brand_name,
@@ -1132,7 +1281,8 @@ def brand_detail(brand_name):
                          anomalies=anomalies,
                          channel_data=channel_data,
                          brands=brands,
-                         analysis_period=analysis_period)
+                         analysis_period=analysis_period,
+                         is_admin=is_admin)
 
 
 @app.route('/api/products')
@@ -1157,23 +1307,57 @@ def api_products():
     return jsonify(products)
 
 
+@app.route('/admin/passwords', methods=['GET', 'POST'])
+@admin_required
+def admin_passwords():
+    """パスワード管理画面（管理者専用）"""
+    global password_cache
+    
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        if action == 'update_admin':
+            new_password = request.form.get('admin_password', '').strip()
+            if new_password and len(new_password) >= 4:
+                update_password('admin', new_password=new_password)
+                flash('管理者パスワードを更新しました', 'success')
+            else:
+                flash('パスワードは4文字以上で入力してください', 'error')
+        
+        elif action == 'update_brand':
+            brand_key = request.form.get('brand_key', '').lower()
+            new_password = request.form.get('brand_password', '').strip()
+            if brand_key and new_password and len(new_password) >= 4:
+                update_password('brand', brand_key=brand_key, new_password=new_password)
+                flash(f'{brand_key} のパスワードを更新しました', 'success')
+            else:
+                flash('パスワードは4文字以上で入力してください', 'error')
+        
+        return redirect(url_for('admin_passwords'))
+    
+    # 現在のパスワード設定を表示
+    return render_template('admin_passwords.html',
+                         brands=BRANDS,
+                         password_cache=password_cache)
+
+
 def init_from_r2():
     """起動時にR2から最新の商品マスタを読み込む"""
     if not is_r2_enabled():
-        print("⚠️ R2 is not enabled. Set R2 environment variables to enable.")
+        print("[WARN] R2 is not enabled. Set R2 environment variables to enable.")
         return False
     
     try:
-        print("☁️ Loading product master from R2...")
+        print("[INFO] Loading product master from R2...")
         df = download_product_master()
         if df is not None and len(df) > 0:
             data_store['product_master'] = process_product_master_df(df)
             data_store['product_master_info'] = get_product_master_info()
-            print(f"✅ Loaded {len(data_store['product_master'])} products from R2")
+            print(f"[OK] Loaded {len(data_store['product_master'])} products from R2")
             
             # GA4データも読み込み
             if get_latest_ga4_data:
-                print("☁️ Loading GA4 data from R2...")
+                print("[INFO] Loading GA4 data from R2...")
                 for brand in BRANDS:
                     ga4_data = get_latest_ga4_data(brand)
                     if ga4_data:
@@ -1193,20 +1377,21 @@ def init_from_r2():
                 # 商品マスタとGA4データがあれば分析実行
                 if any(data_store['ga_sales'].values()):
                     merge_and_analyze()
-                    print("✅ Auto-merged data on startup")
+                    print("[OK] Auto-merged data on startup")
             
             return True
         else:
-            print("⚠️ No product master found in R2")
+            print("[WARN] No product master found in R2")
             return False
     except Exception as e:
-        print(f"❌ Error loading from R2: {e}")
+        print(f"[ERROR] Error loading from R2: {e}")
         return False
 
 
-# アプリ起動時にR2から読み込み
+# アプリ起動時に初期化
 with app.app_context():
-    init_from_r2()
+    init_passwords()  # パスワード初期化
+    init_from_r2()    # R2からデータ読み込み
 
 
 if __name__ == '__main__':

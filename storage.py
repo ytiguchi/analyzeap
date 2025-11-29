@@ -68,15 +68,15 @@ def find_latest_csv():
                 })
         
         if not csv_files:
-            print("❌ No product master CSV files found in R2")
+            print("[ERROR] No product master CSV files found in R2")
             return None
         
         # 最新のファイルを取得
         latest = max(csv_files, key=lambda x: x['last_modified'])
-        print(f"✅ Found product master CSV: {latest['key']} (modified: {latest['last_modified']})")
+        print(f"[OK] Found product master CSV: {latest['key']}")
         return latest
     except Exception as e:
-        print(f"❌ Error finding latest CSV: {e}")
+        print(f"[ERROR] Error finding latest CSV: {e}")
         return None
 
 
@@ -94,7 +94,7 @@ def download_product_master():
     file_key = latest['key'] if latest else config['product_master_key']
     
     try:
-        print(f"📥 Downloading from R2: {config['bucket_name']}/{file_key}")
+        print(f"[INFO] Downloading from R2: {config['bucket_name']}/{file_key}")
         response = client.get_object(Bucket=config['bucket_name'], Key=file_key)
         content = response['Body'].read()
         
@@ -103,16 +103,16 @@ def download_product_master():
             try:
                 csv_str = content.decode(enc)
                 df = pd.read_csv(StringIO(csv_str))
-                print(f"✅ Downloaded product master from R2: {len(df)} rows (encoding: {enc})")
+                print(f"[OK] Downloaded product master from R2: {len(df)} rows")
                 return df
             except Exception as e:
                 print(f"  Encoding {enc} failed: {e}")
                 continue
         
-        print("❌ All encodings failed")
+        print("[ERROR] All encodings failed")
         return None
     except Exception as e:
-        print(f"❌ Error downloading from R2: {e}")
+        print(f"[ERROR] Error downloading from R2: {e}")
         return None
 
 
@@ -133,10 +133,10 @@ def upload_product_master(filepath):
                 Body=f,
                 ContentType='text/csv'
             )
-        print(f"✅ Uploaded product master to R2: {config['product_master_key']}")
+        print(f"[OK] Uploaded product master to R2: {config['product_master_key']}")
         return True
     except Exception as e:
-        print(f"❌ Error uploading to R2: {e}")
+        print(f"[ERROR] Error uploading to R2: {e}")
         return False
 
 
@@ -186,10 +186,10 @@ def save_ga4_data(brand, df, start_date, end_date):
             Body=csv_buffer.getvalue().encode('utf-8'),
             ContentType='text/csv'
         )
-        print(f"✅ Saved GA4 data to R2: {filename} ({len(df)} rows)")
+        print(f"[OK] Saved GA4 data to R2: {filename} ({len(df)} rows)")
         return True
     except Exception as e:
-        print(f"❌ Error saving GA4 data to R2: {e}")
+        print(f"[ERROR] Error saving GA4 data to R2: {e}")
         return False
 
 
@@ -231,7 +231,7 @@ def get_latest_ga4_data(brand):
         start_date = parts[-2] if len(parts) >= 3 else None
         end_date = parts[-1] if len(parts) >= 3 else None
         
-        print(f"✅ Loaded GA4 data from R2: {brand} ({len(df)} rows)")
+        print(f"[OK] Loaded GA4 data from R2: {brand} ({len(df)} rows)")
         return {
             'df': df,
             'start_date': start_date,
@@ -239,7 +239,61 @@ def get_latest_ga4_data(brand):
             'last_modified': latest['last_modified']
         }
     except Exception as e:
-        print(f"❌ Error loading GA4 data from R2: {e}")
+        print(f"[ERROR] Error loading GA4 data from R2: {e}")
+        return None
+
+
+def save_passwords(passwords_dict):
+    """パスワード設定をR2に保存（JSONファイル）"""
+    import json
+    client = get_r2_client()
+    if client is None:
+        print("R2 credentials not configured, skipping password save")
+        return False
+    
+    config = get_r2_config()
+    
+    try:
+        json_str = json.dumps(passwords_dict, ensure_ascii=False)
+        client.put_object(
+            Bucket=config['bucket_name'],
+            Key='config/passwords.json',
+            Body=json_str.encode('utf-8'),
+            ContentType='application/json'
+        )
+        print("[OK] Saved passwords to R2")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Error saving passwords to R2: {e}")
+        return False
+
+
+def load_passwords():
+    """R2からパスワード設定を読み込み"""
+    import json
+    from botocore.exceptions import ClientError
+    
+    client = get_r2_client()
+    if client is None:
+        return None
+    
+    config = get_r2_config()
+    
+    try:
+        response = client.get_object(Bucket=config['bucket_name'], Key='config/passwords.json')
+        content = response['Body'].read().decode('utf-8')
+        passwords = json.loads(content)
+        print("[OK] Loaded passwords from R2")
+        return passwords
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        if error_code == 'NoSuchKey':
+            print("[INFO] No passwords.json found in R2, will use defaults")
+            return None
+        print(f"[WARN] Error loading passwords from R2: {e}")
+        return None
+    except Exception as e:
+        print(f"[WARN] Error loading passwords from R2: {e}")
         return None
 
 
@@ -247,7 +301,7 @@ def get_product_master_info():
     """商品マスタの情報を取得（最新のCSVを自動検出）"""
     client = get_r2_client()
     if client is None:
-        print("❌ get_product_master_info: R2 client is None")
+        print("[ERROR] get_product_master_info: R2 client is None")
         return {'exists': False}
     
     config = get_r2_config()
@@ -272,8 +326,8 @@ def get_product_master_info():
             'last_modified': response['LastModified'],
             'exists': True
         }
-        print(f"✅ Found: {info}")
+        print(f"[OK] Found: {info}")
         return info
     except Exception as e:
-        print(f"❌ get_product_master_info error: {e}")
+        print(f"[ERROR] get_product_master_info error: {e}")
         return {'exists': False}

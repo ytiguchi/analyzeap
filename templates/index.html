@@ -6,14 +6,21 @@
 {% if not has_data %}
     <div class="card" style="text-align: center; padding: 4rem 2rem;">
         <div style="font-size: 4rem; margin-bottom: 1rem;">📁</div>
-        <h2 style="margin-bottom: 1rem;">データをアップロードしてください</h2>
+        <h2 style="margin-bottom: 1rem;">データがありません</h2>
         <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+            {% if is_admin %}
             商品マスタCSVとGA4売上CSVをアップロードすると、<br>
             ブランド別の在庫×売上分析が開始されます。
+            {% else %}
+            データがまだ読み込まれていません。<br>
+            管理者にお問い合わせください。
+            {% endif %}
         </p>
+        {% if is_admin %}
         <a href="{{ url_for('upload') }}" class="btn btn-primary">
             📤 CSVをアップロード
         </a>
+        {% endif %}
     </div>
 {% else %}
     <!-- 分析期間バナー -->
@@ -34,9 +41,11 @@
                 {% endif %}
             </div>
         </div>
+        {% if is_admin %}
         <a href="{{ url_for('upload') }}" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">
             🔄 更新
         </a>
+        {% endif %}
     </div>
     {% endif %}
 
