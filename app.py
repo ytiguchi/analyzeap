@@ -124,7 +124,8 @@ try:
     from storage import (
         download_product_master, upload_product_master, get_product_master_info, 
         is_r2_enabled, save_ga4_data, get_latest_ga4_data,
-        save_passwords as r2_save_passwords, load_passwords as r2_load_passwords
+        save_passwords as r2_save_passwords, load_passwords as r2_load_passwords,
+        save_period_data, load_period_data, get_available_periods
     )
 except ImportError:
     is_r2_enabled = lambda: False
@@ -134,6 +135,9 @@ except ImportError:
     upload_product_master = None
     get_product_master_info = None
     r2_save_passwords = None
+    save_period_data = None
+    load_period_data = None
+    get_available_periods = None
     r2_load_passwords = None
 
 # GA4 API連携
@@ -1349,6 +1353,22 @@ def fetch_ga4():
             data_store['periods_data'][period_type]['merged_data_previous'] = data_store['merged_data_previous']
             data_store['current_period'] = period_type
             
+            # R2に期間別データを保存（永続化）
+            if save_period_data and is_r2_enabled():
+                for brand, ga_info in data_store['ga_sales'].items():
+                    if ga_info and 'data' in ga_info and 'period' in ga_info:
+                        period = ga_info['period']
+                        start_str = period['start_date'].strftime('%Y%m%d') if period['start_date'] else ''
+                        end_str = period['end_date'].strftime('%Y%m%d') if period['end_date'] else ''
+                        save_period_data(period_type, brand, ga_info['data'], start_str, end_str, is_previous=False)
+                
+                for brand, ga_info in data_store['ga_sales_previous'].items():
+                    if ga_info and 'data' in ga_info and 'period' in ga_info:
+                        period = ga_info['period']
+                        start_str = period['start_date'].strftime('%Y%m%d') if period['start_date'] else ''
+                        end_str = period['end_date'].strftime('%Y%m%d') if period['end_date'] else ''
+                        save_period_data(period_type, brand, ga_info['data'], start_str, end_str, is_previous=True)
+            
             flash('データの突合・分析が完了しました！', 'success')
             return redirect(url_for('index'))
         
@@ -1437,6 +1457,23 @@ def scheduled_update():
                         data_store['periods_data'][period_type]['channel_data'][brand] = channel_df
                 except Exception as e:
                     print(f"[SCHEDULER] Channel data error for {period_type}: {e}")
+                
+                # R2に期間別データを保存（永続化）
+                if save_period_data and is_r2_enabled():
+                    for brand, ga_info in data_store['periods_data'][period_type]['ga_sales'].items():
+                        if ga_info and 'data' in ga_info and 'period' in ga_info:
+                            period = ga_info['period']
+                            start_str = period['start_date'].strftime('%Y%m%d') if period['start_date'] else ''
+                            end_str = period['end_date'].strftime('%Y%m%d') if period['end_date'] else ''
+                            save_period_data(period_type, brand, ga_info['data'], start_str, end_str, is_previous=False)
+                    
+                    for brand, ga_info in data_store['periods_data'][period_type]['ga_sales_previous'].items():
+                        if ga_info and 'data' in ga_info and 'period' in ga_info:
+                            period = ga_info['period']
+                            start_str = period['start_date'].strftime('%Y%m%d') if period['start_date'] else ''
+                            end_str = period['end_date'].strftime('%Y%m%d') if period['end_date'] else ''
+                            save_period_data(period_type, brand, ga_info['data'], start_str, end_str, is_previous=True)
+                    print(f"[SCHEDULER] Saved {period_type} data to R2")
                 
             except Exception as e:
                 results_summary['periods'][period_type]['success'] = False
@@ -1595,7 +1632,7 @@ def admin_passwords():
 
 
 def init_from_r2():
-    """起動時にR2から最新の商品マスタを読み込む"""
+    """起動時にR2から最新の商品マスタと期間別データを読み込む"""
     if not is_r2_enabled():
         print("[WARN] R2 is not enabled. Set R2 environment variables to enable.")
         return False
@@ -1608,9 +1645,75 @@ def init_from_r2():
             data_store['product_master_info'] = get_product_master_info()
             print(f"[OK] Loaded {len(data_store['product_master'])} products from R2")
             
-            # GA4データも読み込み
-            if get_latest_ga4_data:
-                print("[INFO] Loading GA4 data from R2...")
+            # 期間別データを読み込み（新方式）
+            if load_period_data and get_available_periods:
+                print("[INFO] Loading period data from R2...")
+                available = get_available_periods()
+                print(f"[INFO] Available periods in R2: {available}")
+                
+                loaded_periods = []
+                for period_type in ['yesterday', '3days', 'weekly']:
+                    period_ga_sales = {}
+                    period_ga_sales_prev = {}
+                    has_data = False
+                    
+                    for brand in BRANDS:
+                        # 現在期間データ
+                        data = load_period_data(period_type, brand, is_previous=False)
+                        if data:
+                            from datetime import datetime
+                            start_date = datetime.strptime(data['start_date'], '%Y%m%d') if data.get('start_date') else None
+                            end_date = datetime.strptime(data['end_date'], '%Y%m%d') if data.get('end_date') else None
+                            period_ga_sales[brand] = {
+                                'data': data['df'],
+                                'period': {
+                                    'start_date': start_date,
+                                    'end_date': end_date,
+                                    'period_type': period_type
+                                }
+                            }
+                            has_data = True
+                        
+                        # 前期間データ
+                        prev_data = load_period_data(period_type, brand, is_previous=True)
+                        if prev_data:
+                            from datetime import datetime
+                            start_date = datetime.strptime(prev_data['start_date'], '%Y%m%d') if prev_data.get('start_date') else None
+                            end_date = datetime.strptime(prev_data['end_date'], '%Y%m%d') if prev_data.get('end_date') else None
+                            period_ga_sales_prev[brand] = {
+                                'data': prev_data['df'],
+                                'period': {
+                                    'start_date': start_date,
+                                    'end_date': end_date,
+                                    'period_type': period_type
+                                }
+                            }
+                    
+                    if has_data:
+                        data_store['periods_data'][period_type]['ga_sales'] = period_ga_sales
+                        data_store['periods_data'][period_type]['ga_sales_previous'] = period_ga_sales_prev
+                        loaded_periods.append(period_type)
+                        print(f"  [OK] Loaded {period_type}: {len(period_ga_sales)} brands")
+                
+                # 読み込んだ期間がある場合、最初の期間をメインにセット
+                if loaded_periods:
+                    default_period = loaded_periods[0]
+                    data_store['ga_sales'] = data_store['periods_data'][default_period]['ga_sales'].copy()
+                    data_store['ga_sales_previous'] = data_store['periods_data'][default_period]['ga_sales_previous'].copy()
+                    data_store['current_period'] = default_period
+                    
+                    # 分析実行
+                    merge_and_analyze()
+                    
+                    # 分析結果を期間データに保存
+                    data_store['periods_data'][default_period]['merged_data'] = data_store['merged_data']
+                    data_store['periods_data'][default_period]['merged_data_previous'] = data_store['merged_data_previous']
+                    
+                    print(f"[OK] Initialized with {default_period} data")
+            
+            # 旧方式のフォールバック
+            elif get_latest_ga4_data:
+                print("[INFO] Loading GA4 data from R2 (legacy)...")
                 for brand in BRANDS:
                     ga4_data = get_latest_ga4_data(brand)
                     if ga4_data:
@@ -1625,9 +1728,8 @@ def init_from_r2():
                                 'period_type': 'daily' if start_date == end_date else 'custom'
                             }
                         }
-                        print(f"  ✅ {brand}: {len(ga4_data['df'])} rows")
+                        print(f"  [OK] {brand}: {len(ga4_data['df'])} rows")
                 
-                # 商品マスタとGA4データがあれば分析実行
                 if any(data_store['ga_sales'].values()):
                     merge_and_analyze()
                     print("[OK] Auto-merged data on startup")

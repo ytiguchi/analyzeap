@@ -193,6 +193,102 @@ def save_ga4_data(brand, df, start_date, end_date):
         return False
 
 
+def save_period_data(period_type, brand, df, start_date, end_date, is_previous=False):
+    """期間タイプ別にGA4データをR2に保存"""
+    client = get_r2_client()
+    if client is None:
+        return False
+    
+    config = get_r2_config()
+    
+    try:
+        # ファイル名: periods/period_type/brand.csv または periods/period_type/brand_prev.csv
+        suffix = "_prev" if is_previous else ""
+        filename = f"periods/{period_type}/{brand}{suffix}.csv"
+        
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        
+        # メタデータとして日付を保存
+        metadata = {
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        
+        client.put_object(
+            Bucket=config['bucket_name'],
+            Key=filename,
+            Body=csv_buffer.getvalue().encode('utf-8'),
+            ContentType='text/csv',
+            Metadata=metadata
+        )
+        print(f"[OK] Saved period data: {filename}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Error saving period data: {e}")
+        return False
+
+
+def load_period_data(period_type, brand, is_previous=False):
+    """期間タイプ別にGA4データをR2から読み込み"""
+    client = get_r2_client()
+    if client is None:
+        return None
+    
+    config = get_r2_config()
+    
+    try:
+        suffix = "_prev" if is_previous else ""
+        filename = f"periods/{period_type}/{brand}{suffix}.csv"
+        
+        response = client.get_object(Bucket=config['bucket_name'], Key=filename)
+        content = response['Body'].read().decode('utf-8')
+        df = pd.read_csv(StringIO(content))
+        
+        # メタデータから日付を取得
+        metadata = response.get('Metadata', {})
+        start_date = metadata.get('start_date')
+        end_date = metadata.get('end_date')
+        
+        return {
+            'df': df,
+            'start_date': start_date,
+            'end_date': end_date
+        }
+    except client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"[ERROR] Error loading period data {period_type}/{brand}: {e}")
+        return None
+
+
+def get_available_periods():
+    """R2に保存されている期間タイプの一覧を取得"""
+    client = get_r2_client()
+    if client is None:
+        return []
+    
+    config = get_r2_config()
+    
+    try:
+        response = client.list_objects_v2(
+            Bucket=config['bucket_name'],
+            Prefix="periods/",
+            Delimiter="/"
+        )
+        
+        periods = []
+        for prefix in response.get('CommonPrefixes', []):
+            period = prefix['Prefix'].replace('periods/', '').rstrip('/')
+            if period in ['yesterday', '3days', 'weekly']:
+                periods.append(period)
+        
+        return periods
+    except Exception as e:
+        print(f"[ERROR] Error getting available periods: {e}")
+        return []
+
+
 def get_latest_ga4_data(brand):
     """R2から最新のGA4データを取得"""
     client = get_r2_client()
