@@ -90,14 +90,29 @@
                 <div class="brand-kpi-grid">
                     <div class="kpi-item">
                         <span class="kpi-value pv">{{ "{:,}".format(brand.total_views|int) }}</span>
+                        {% if brand.delta_views is defined and brand.delta_views != 0 %}
+                        <span class="kpi-delta {% if brand.delta_views > 0 %}up{% else %}down{% endif %}">
+                            {{ "{:+.0f}".format(brand.delta_views_pct or 0) }}%
+                        </span>
+                        {% endif %}
                         <span class="kpi-label">PV</span>
                     </div>
                     <div class="kpi-item">
                         <span class="kpi-value">{{ "{:,}".format(brand.total_add_to_cart|int) }}</span>
+                        {% if brand.delta_add_to_cart is defined and brand.delta_add_to_cart != 0 %}
+                        <span class="kpi-delta {% if brand.delta_add_to_cart > 0 %}up{% else %}down{% endif %}">
+                            {{ "{:+.0f}".format(brand.delta_add_to_cart_pct or 0) }}%
+                        </span>
+                        {% endif %}
                         <span class="kpi-label">カート追加</span>
                     </div>
                     <div class="kpi-item">
                         <span class="kpi-value">{{ "{:,}".format(brand.total_purchases|int) }}</span>
+                        {% if brand.delta_purchases is defined and brand.delta_purchases != 0 %}
+                        <span class="kpi-delta {% if brand.delta_purchases > 0 %}up{% else %}down{% endif %}">
+                            {{ "{:+.0f}".format(brand.delta_purchases_pct or 0) }}%
+                        </span>
+                        {% endif %}
                         <span class="kpi-label">購入</span>
                     </div>
                     <div class="kpi-item">
@@ -359,6 +374,22 @@
     color: var(--text-muted);
     margin-top: 0.2rem;
     text-transform: uppercase;
+}
+
+.kpi-delta {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    margin-top: 0.1rem;
+}
+
+.kpi-delta.up {
+    color: #2E7D32;
+}
+
+.kpi-delta.down {
+    color: #C62828;
 }
 
 .brand-quick-links {

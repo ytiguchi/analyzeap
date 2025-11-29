@@ -415,6 +415,7 @@ def get_brand_summary():
     if has_prev:
         agg_dict['prev_revenue'] = 'sum'
         agg_dict['prev_views'] = 'sum'
+        agg_dict['prev_add_to_cart'] = 'sum'
         agg_dict['prev_purchases'] = 'sum'
     
     summary = df.groupby('brand').agg(agg_dict).reset_index()
@@ -424,7 +425,7 @@ def get_brand_summary():
                  'total_add_to_cart', 'total_purchases', 'total_revenue',
                  'problem_count', 'opportunity_count']
     if has_prev:
-        base_cols.extend(['prev_total_revenue', 'prev_total_views', 'prev_total_purchases'])
+        base_cols.extend(['prev_total_revenue', 'prev_total_views', 'prev_total_add_to_cart', 'prev_total_purchases'])
     summary.columns = base_cols
     
     # CVR計算
@@ -434,10 +435,29 @@ def get_brand_summary():
     
     # デルタ計算（前期間データがある場合）
     if has_prev:
+        # 売上デルタ
         summary['delta_revenue'] = summary['total_revenue'] - summary['prev_total_revenue']
         summary['delta_revenue_pct'] = summary.apply(
             lambda x: ((x['total_revenue'] - x['prev_total_revenue']) / x['prev_total_revenue'] * 100) 
                       if x['prev_total_revenue'] > 0 else 0, axis=1
+        )
+        # PVデルタ
+        summary['delta_views'] = summary['total_views'] - summary['prev_total_views']
+        summary['delta_views_pct'] = summary.apply(
+            lambda x: ((x['total_views'] - x['prev_total_views']) / x['prev_total_views'] * 100) 
+                      if x['prev_total_views'] > 0 else 0, axis=1
+        )
+        # 購入デルタ
+        summary['delta_purchases'] = summary['total_purchases'] - summary['prev_total_purchases']
+        summary['delta_purchases_pct'] = summary.apply(
+            lambda x: ((x['total_purchases'] - x['prev_total_purchases']) / x['prev_total_purchases'] * 100) 
+                      if x['prev_total_purchases'] > 0 else 0, axis=1
+        )
+        # カート追加デルタ
+        summary['delta_add_to_cart'] = summary['total_add_to_cart'] - summary['prev_total_add_to_cart']
+        summary['delta_add_to_cart_pct'] = summary.apply(
+            lambda x: ((x['total_add_to_cart'] - x['prev_total_add_to_cart']) / x['prev_total_add_to_cart'] * 100) 
+                      if x['prev_total_add_to_cart'] > 0 else 0, axis=1
         )
     
     return summary.to_dict('records')
