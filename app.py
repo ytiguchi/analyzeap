@@ -1336,6 +1336,10 @@ def fetch_ga4():
             flash('GA4からデータを取得できませんでした', 'error')
             return redirect(url_for('upload'))
         
+        # 古いデータをクリアして、新しいデータのみを使用
+        data_store['ga_sales'] = {}
+        data_store['ga_sales_previous'] = {}
+        
         # 取得したデータをdata_storeに保存 & R2にも保存
         for brand, result in results.items():
             data_store['ga_sales'][brand] = result
