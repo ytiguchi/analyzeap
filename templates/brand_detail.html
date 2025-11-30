@@ -383,23 +383,23 @@
                         <a href="{{ item.product_url or '#' }}" target="_blank" class="anomaly-list-item">
                             <img src="{{ item.image_url or 'https://via.placeholder.com/56x56' }}" class="anomaly-list-img" onerror="this.src='https://via.placeholder.com/56x56'">
                             <div class="anomaly-list-info">
-                                <div class="anomaly-list-name">{{ item.product_name[:20] }}{% if item.product_name|length > 20 %}...{% endif %}</div>
-                                <div class="anomaly-list-variant">{{ item.color_name }} / {{ item.size or 'F' }}</div>
+                                <div class="anomaly-list-name">{{ (item.product_name or '')[:20] }}{% if (item.product_name or '')|length > 20 %}...{% endif %}</div>
+                                <div class="anomaly-list-variant">{{ item.color_name or '-' }} / {{ item.size or 'F' }}</div>
                             </div>
                             <div class="anomaly-list-metrics">
                                 <div class="metric-row">
-                                    <span class="metric-val">{{ "{:,}".format(item.views|int) }}</span>
+                                    <span class="metric-val">{{ "{:,}".format((item.views or 0)|int) }}</span>
                                     <span class="metric-lbl">PV</span>
-                                    <span class="metric-delta up">+{{ "%.0f"|format(item.delta_views_pct) }}%</span>
+                                    <span class="metric-delta up">+{{ "%.0f"|format(item.delta_views_pct or 0) }}%</span>
                                 </div>
                                 <div class="metric-row">
-                                    <span class="metric-val">¥{{ "{:,.0f}".format(item.revenue|int) }}</span>
+                                    <span class="metric-val">¥{{ "{:,.0f}".format((item.revenue or 0)|int) }}</span>
                                     <span class="metric-lbl">売上</span>
                                 </div>
                                 <div class="metric-row">
-                                    <span class="metric-val">{{ item.purchases|int }}</span>
+                                    <span class="metric-val">{{ (item.purchases or 0)|int }}</span>
                                     <span class="metric-lbl">購入</span>
-                                    {% if item.delta_purchases_pct > 0 %}<span class="metric-delta up">+{{ "%.0f"|format(item.delta_purchases_pct) }}%</span>{% endif %}
+                                    {% if (item.delta_purchases_pct or 0) > 0 %}<span class="metric-delta up">+{{ "%.0f"|format(item.delta_purchases_pct or 0) }}%</span>{% endif %}
                                 </div>
                             </div>
                         </a>
@@ -421,21 +421,21 @@
                         <a href="{{ item.product_url or '#' }}" target="_blank" class="anomaly-list-item warning">
                             <img src="{{ item.image_url or 'https://via.placeholder.com/56x56' }}" class="anomaly-list-img" onerror="this.src='https://via.placeholder.com/56x56'">
                             <div class="anomaly-list-info">
-                                <div class="anomaly-list-name">{{ item.product_name[:20] }}{% if item.product_name|length > 20 %}...{% endif %}</div>
-                                <div class="anomaly-list-variant">{{ item.color_name }} / 在庫 <strong>{{ item.total_stock|int }}</strong></div>
+                                <div class="anomaly-list-name">{{ (item.product_name or '')[:20] }}{% if (item.product_name or '')|length > 20 %}...{% endif %}</div>
+                                <div class="anomaly-list-variant">{{ item.color_name or '-' }} / 在庫 <strong>{{ (item.total_stock or 0)|int }}</strong></div>
                             </div>
                             <div class="anomaly-list-metrics">
                                 <div class="metric-row">
-                                    <span class="metric-val">{{ "{:,}".format(item.views|int) }}</span>
+                                    <span class="metric-val">{{ "{:,}".format((item.views or 0)|int) }}</span>
                                     <span class="metric-lbl">PV</span>
-                                    <span class="metric-delta down">{{ "%.0f"|format(item.delta_views_pct) }}%</span>
+                                    <span class="metric-delta down">{{ "%.0f"|format(item.delta_views_pct or 0) }}%</span>
                                 </div>
                                 <div class="metric-row">
-                                    <span class="metric-val">¥{{ "{:,.0f}".format(item.revenue|int) }}</span>
+                                    <span class="metric-val">¥{{ "{:,.0f}".format((item.revenue or 0)|int) }}</span>
                                     <span class="metric-lbl">売上</span>
                                 </div>
                                 <div class="metric-row">
-                                    <span class="metric-val">{{ item.purchases|int }}</span>
+                                    <span class="metric-val">{{ (item.purchases or 0)|int }}</span>
                                     <span class="metric-lbl">購入</span>
                                 </div>
                             </div>
@@ -573,9 +573,9 @@
                         <div class="campaign-kpi">
                             <span class="kpi-num">{{ "{:,}".format(ad.sessions or 0) }}</span>
                             <span class="kpi-lbl">セッション</span>
-                            {% if ad.prev_sessions and ad.prev_sessions > 0 %}
-                            <span class="kpi-delta-mini {% if ad.sessions > ad.prev_sessions %}up{% else %}down{% endif %}">
-                                {{ "{:+.0f}".format((ad.sessions - ad.prev_sessions) / ad.prev_sessions * 100) }}%
+                            {% if ad.prev_sessions and ad.prev_sessions > 0 and ad.sessions is not none %}
+                            <span class="kpi-delta-mini {% if (ad.sessions or 0) > ad.prev_sessions %}up{% else %}down{% endif %}">
+                                {{ "{:+.0f}".format(((ad.sessions or 0) - ad.prev_sessions) / ad.prev_sessions * 100) }}%
                             </span>
                             {% endif %}
                         </div>
@@ -584,9 +584,9 @@
                         <div class="campaign-kpi">
                             <span class="kpi-num">{{ ad.purchases or 0 }}</span>
                             <span class="kpi-lbl">購入</span>
-                            {% if ad.prev_purchases and ad.prev_purchases > 0 %}
-                            <span class="kpi-delta-mini {% if ad.purchases > ad.prev_purchases %}up{% else %}down{% endif %}">
-                                {{ "{:+.0f}".format((ad.purchases - ad.prev_purchases) / ad.prev_purchases * 100) }}%
+                            {% if ad.prev_purchases and ad.prev_purchases > 0 and ad.purchases is not none %}
+                            <span class="kpi-delta-mini {% if (ad.purchases or 0) > ad.prev_purchases %}up{% else %}down{% endif %}">
+                                {{ "{:+.0f}".format(((ad.purchases or 0) - ad.prev_purchases) / ad.prev_purchases * 100) }}%
                             </span>
                             {% endif %}
                         </div>

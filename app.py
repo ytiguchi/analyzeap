@@ -843,7 +843,12 @@ def process_channel_data(channel_info):
     """
     チャネルデータを整形（日本語化、比較データ付き）
     """
-    from ga4_api import translate_channel_name, translate_source_name
+    try:
+        from ga4_api import translate_channel_name, translate_source_name
+    except ImportError:
+        # GA4モジュールが使えない場合はフォールバック関数を使用
+        translate_channel_name = lambda x: f'📡 {x}'
+        translate_source_name = lambda x: x
     
     if not channel_info or 'current' not in channel_info:
         return []
@@ -958,7 +963,11 @@ def process_campaign_data(campaign_info):
     """
     キャンペーンデータを広告タイプ別に整形
     """
-    from ga4_api import classify_ad_type, AD_TYPE_PATTERNS
+    try:
+        from ga4_api import classify_ad_type, AD_TYPE_PATTERNS
+    except ImportError:
+        # GA4モジュールが使えない場合は空を返す
+        return []
     
     if not campaign_info or 'current' not in campaign_info:
         return []
