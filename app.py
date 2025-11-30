@@ -125,7 +125,8 @@ try:
         download_product_master, upload_product_master, get_product_master_info, 
         is_r2_enabled, save_ga4_data, get_latest_ga4_data,
         save_passwords as r2_save_passwords, load_passwords as r2_load_passwords,
-        save_period_data, load_period_data, get_available_periods
+        save_period_data, load_period_data, get_available_periods,
+        save_channel_data, load_channel_data, save_campaign_data, load_campaign_data
     )
 except ImportError:
     is_r2_enabled = lambda: False
@@ -139,6 +140,10 @@ except ImportError:
     load_period_data = None
     get_available_periods = None
     r2_load_passwords = None
+    save_channel_data = None
+    load_channel_data = None
+    save_campaign_data = None
+    load_campaign_data = None
 
 # GA4 API連携
 try:
@@ -1567,6 +1572,27 @@ def fetch_ga4():
                         start_str = period['start_date'].strftime('%Y%m%d') if period['start_date'] else ''
                         end_str = period['end_date'].strftime('%Y%m%d') if period['end_date'] else ''
                         save_period_data(period_type, brand, ga_info['data'], start_str, end_str, is_previous=True)
+                
+                # チャネルデータもR2に保存
+                if save_channel_data:
+                    for brand, channel_info in data_store['channel_data'].items():
+                        if channel_info and 'current' in channel_info and channel_info['current'] is not None:
+                            period_info = channel_info.get('period', {})
+                            start_str = period_info.get('start', '')
+                            end_str = period_info.get('end', '')
+                            save_channel_data(period_type, brand, channel_info['current'], start_str, end_str, is_previous=False)
+                            if channel_info.get('previous') is not None:
+                                prev_start = period_info.get('prev_start', '')
+                                prev_end = period_info.get('prev_end', '')
+                                save_channel_data(period_type, brand, channel_info['previous'], prev_start, prev_end, is_previous=True)
+                
+                # キャンペーンデータもR2に保存
+                if save_campaign_data:
+                    for brand, campaign_info in data_store['campaign_data'].items():
+                        if campaign_info and 'current' in campaign_info and campaign_info['current'] is not None:
+                            save_campaign_data(period_type, brand, campaign_info['current'], '', '', is_previous=False)
+                            if campaign_info.get('previous') is not None:
+                                save_campaign_data(period_type, brand, campaign_info['previous'], '', '', is_previous=True)
             
             flash('データの突合・分析が完了しました！', 'success')
             return redirect(url_for('index'))
@@ -1901,6 +1927,40 @@ def init_from_r2():
                         data_store['periods_data'][period_type]['ga_sales_previous'] = period_ga_sales_prev
                         loaded_periods.append(period_type)
                         print(f"  [OK] Loaded {period_type}: {len(period_ga_sales)} brands")
+                        
+                        # チャネルデータもR2から読み込み
+                        if load_channel_data:
+                            period_channel_data = {}
+                            for brand in BRANDS:
+                                ch_data = load_channel_data(period_type, brand, is_previous=False)
+                                ch_prev = load_channel_data(period_type, brand, is_previous=True)
+                                if ch_data:
+                                    period_channel_data[brand] = {
+                                        'current': ch_data['df'],
+                                        'previous': ch_prev['df'] if ch_prev else None,
+                                        'period': {
+                                            'start': ch_data.get('start_date', ''),
+                                            'end': ch_data.get('end_date', ''),
+                                        }
+                                    }
+                            if period_channel_data:
+                                data_store['periods_data'][period_type]['channel_data'] = period_channel_data
+                                print(f"    [OK] Loaded channel data for {period_type}: {len(period_channel_data)} brands")
+                        
+                        # キャンペーンデータもR2から読み込み
+                        if load_campaign_data:
+                            period_campaign_data = {}
+                            for brand in BRANDS:
+                                camp_data = load_campaign_data(period_type, brand, is_previous=False)
+                                camp_prev = load_campaign_data(period_type, brand, is_previous=True)
+                                if camp_data:
+                                    period_campaign_data[brand] = {
+                                        'current': camp_data['df'],
+                                        'previous': camp_prev['df'] if camp_prev else None,
+                                    }
+                            if period_campaign_data:
+                                data_store['periods_data'][period_type]['campaign_data'] = period_campaign_data
+                                print(f"    [OK] Loaded campaign data for {period_type}: {len(period_campaign_data)} brands")
                 
                 # 読み込んだ期間全てに対して分析を実行
                 if loaded_periods:

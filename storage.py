@@ -296,6 +296,136 @@ def get_available_periods():
         return []
 
 
+def save_channel_data(period_type, brand, channel_df, start_date, end_date, is_previous=False):
+    """チャネルデータをR2に保存"""
+    client = get_r2_client()
+    if client is None:
+        return False
+    
+    config = get_r2_config()
+    
+    try:
+        suffix = "_prev" if is_previous else ""
+        filename = f"channels/{period_type}/{brand}{suffix}.csv"
+        
+        csv_buffer = StringIO()
+        channel_df.to_csv(csv_buffer, index=False)
+        
+        metadata = {
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        
+        client.put_object(
+            Bucket=config['bucket_name'],
+            Key=filename,
+            Body=csv_buffer.getvalue().encode('utf-8'),
+            ContentType='text/csv',
+            Metadata=metadata
+        )
+        print(f"[OK] Saved channel data: {filename}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Error saving channel data: {e}")
+        return False
+
+
+def load_channel_data(period_type, brand, is_previous=False):
+    """チャネルデータをR2から読み込み"""
+    client = get_r2_client()
+    if client is None:
+        return None
+    
+    config = get_r2_config()
+    
+    try:
+        suffix = "_prev" if is_previous else ""
+        filename = f"channels/{period_type}/{brand}{suffix}.csv"
+        
+        response = client.get_object(Bucket=config['bucket_name'], Key=filename)
+        content = response['Body'].read().decode('utf-8')
+        df = pd.read_csv(StringIO(content))
+        
+        metadata = response.get('Metadata', {})
+        
+        print(f"[OK] Loaded channel data: {filename} ({len(df)} rows)")
+        return {
+            'df': df,
+            'start_date': metadata.get('start_date'),
+            'end_date': metadata.get('end_date')
+        }
+    except client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"[ERROR] Error loading channel data {period_type}/{brand}: {e}")
+        return None
+
+
+def save_campaign_data(period_type, brand, campaign_df, start_date, end_date, is_previous=False):
+    """キャンペーンデータをR2に保存"""
+    client = get_r2_client()
+    if client is None:
+        return False
+    
+    config = get_r2_config()
+    
+    try:
+        suffix = "_prev" if is_previous else ""
+        filename = f"campaigns/{period_type}/{brand}{suffix}.csv"
+        
+        csv_buffer = StringIO()
+        campaign_df.to_csv(csv_buffer, index=False)
+        
+        metadata = {
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        
+        client.put_object(
+            Bucket=config['bucket_name'],
+            Key=filename,
+            Body=csv_buffer.getvalue().encode('utf-8'),
+            ContentType='text/csv',
+            Metadata=metadata
+        )
+        print(f"[OK] Saved campaign data: {filename}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Error saving campaign data: {e}")
+        return False
+
+
+def load_campaign_data(period_type, brand, is_previous=False):
+    """キャンペーンデータをR2から読み込み"""
+    client = get_r2_client()
+    if client is None:
+        return None
+    
+    config = get_r2_config()
+    
+    try:
+        suffix = "_prev" if is_previous else ""
+        filename = f"campaigns/{period_type}/{brand}{suffix}.csv"
+        
+        response = client.get_object(Bucket=config['bucket_name'], Key=filename)
+        content = response['Body'].read().decode('utf-8')
+        df = pd.read_csv(StringIO(content))
+        
+        metadata = response.get('Metadata', {})
+        
+        print(f"[OK] Loaded campaign data: {filename} ({len(df)} rows)")
+        return {
+            'df': df,
+            'start_date': metadata.get('start_date'),
+            'end_date': metadata.get('end_date')
+        }
+    except client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"[ERROR] Error loading campaign data {period_type}/{brand}: {e}")
+        return None
+
+
 def get_latest_ga4_data(brand):
     """R2から最新のGA4データを取得"""
     client = get_r2_client()
