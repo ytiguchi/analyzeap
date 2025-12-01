@@ -418,13 +418,13 @@ def switch_period_data(period_type):
         period_data['merged_data_previous'] = data_store['merged_data_previous']
         print(f"[OK] Analyzed {period_type}")
     
-    # メインストアにコピー
-    data_store['ga_sales'] = period_data['ga_sales'].copy()
-    data_store['ga_sales_previous'] = period_data['ga_sales_previous'].copy()
-    data_store['channel_data'] = period_data['channel_data'].copy()
+    # メインストアにコピー（存在しないキーは空dictで初期化）
+    data_store['ga_sales'] = period_data.get('ga_sales', {}).copy()
+    data_store['ga_sales_previous'] = period_data.get('ga_sales_previous', {}).copy()
+    data_store['channel_data'] = period_data.get('channel_data', {}).copy()
     data_store['campaign_data'] = period_data.get('campaign_data', {}).copy()
-    data_store['merged_data'] = period_data['merged_data']
-    data_store['merged_data_previous'] = period_data['merged_data_previous']
+    data_store['merged_data'] = period_data.get('merged_data')
+    data_store['merged_data_previous'] = period_data.get('merged_data_previous')
     data_store['current_period'] = period_type
     
     return True
@@ -1708,6 +1708,21 @@ def scheduled_update():
                             start_str = period['start_date'].strftime('%Y%m%d') if period['start_date'] else ''
                             end_str = period['end_date'].strftime('%Y%m%d') if period['end_date'] else ''
                             save_period_data(period_type, brand, ga_info['data'], start_str, end_str, is_previous=True)
+                    
+                    # チャネルデータもR2に保存
+                    if save_channel_data:
+                        for brand, channel_info in data_store['periods_data'][period_type].get('channel_data', {}).items():
+                            try:
+                                if channel_info and 'current' in channel_info and channel_info['current'] is not None:
+                                    period_info = channel_info.get('period', {})
+                                    save_channel_data(period_type, brand, channel_info['current'], 
+                                                     period_info.get('start', ''), period_info.get('end', ''), is_previous=False)
+                                    if channel_info.get('previous') is not None:
+                                        save_channel_data(period_type, brand, channel_info['previous'],
+                                                         period_info.get('prev_start', ''), period_info.get('prev_end', ''), is_previous=True)
+                            except Exception as e:
+                                print(f"[SCHEDULER] Error saving channel data for {brand}: {e}")
+                    
                     print(f"[SCHEDULER] Saved {period_type} data to R2")
                 
             except Exception as e:
