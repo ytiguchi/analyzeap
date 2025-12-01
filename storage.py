@@ -332,6 +332,8 @@ def save_channel_data(period_type, brand, channel_df, start_date, end_date, is_p
 
 def load_channel_data(period_type, brand, is_previous=False):
     """チャネルデータをR2から読み込み"""
+    from botocore.exceptions import ClientError
+    
     client = get_r2_client()
     if client is None:
         return None
@@ -354,7 +356,11 @@ def load_channel_data(period_type, brand, is_previous=False):
             'start_date': metadata.get('start_date'),
             'end_date': metadata.get('end_date')
         }
-    except client.exceptions.NoSuchKey:
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        if error_code in ['NoSuchKey', '404', 'NotFound']:
+            return None
+        print(f"[ERROR] Error loading channel data {period_type}/{brand}: {e}")
         return None
     except Exception as e:
         print(f"[ERROR] Error loading channel data {period_type}/{brand}: {e}")
@@ -397,6 +403,8 @@ def save_campaign_data(period_type, brand, campaign_df, start_date, end_date, is
 
 def load_campaign_data(period_type, brand, is_previous=False):
     """キャンペーンデータをR2から読み込み"""
+    from botocore.exceptions import ClientError
+    
     client = get_r2_client()
     if client is None:
         return None
@@ -419,7 +427,11 @@ def load_campaign_data(period_type, brand, is_previous=False):
             'start_date': metadata.get('start_date'),
             'end_date': metadata.get('end_date')
         }
-    except client.exceptions.NoSuchKey:
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        if error_code in ['NoSuchKey', '404', 'NotFound']:
+            return None
+        print(f"[ERROR] Error loading campaign data {period_type}/{brand}: {e}")
         return None
     except Exception as e:
         print(f"[ERROR] Error loading campaign data {period_type}/{brand}: {e}")
