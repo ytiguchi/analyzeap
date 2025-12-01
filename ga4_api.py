@@ -6,6 +6,7 @@ GA4 API 連携
 
 import os
 import json
+import time
 from datetime import datetime, timedelta
 from google.analytics.data_v1beta import BetaAnalyticsDataClient
 from google.analytics.data_v1beta.types import (
@@ -16,6 +17,25 @@ from google.analytics.data_v1beta.types import (
 )
 from google.oauth2 import service_account
 import pandas as pd
+
+
+def retry_with_backoff(func, max_retries=3, initial_delay=1):
+    """リトライ処理（指数バックオフ）"""
+    def wrapper(*args, **kwargs):
+        delay = initial_delay
+        last_exception = None
+        for attempt in range(max_retries):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    print(f"[RETRY] Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+                    time.sleep(delay)
+                    delay *= 2  # 指数バックオフ
+        print(f"[ERROR] All {max_retries} attempts failed: {last_exception}")
+        return None
+    return wrapper
 
 
 def get_ga4_config():
@@ -68,9 +88,45 @@ def get_ga4_client():
         return None
 
 
+def _fetch_ecommerce_data_impl(client, property_id: str, start_date: str, end_date: str, brand: str) -> pd.DataFrame:
+    """GA4データ取得の実装（リトライ対象）"""
+    request = RunReportRequest(
+        property=f"properties/{property_id}",
+        dimensions=[
+            Dimension(name="itemId"),
+            Dimension(name="itemName"),
+        ],
+        metrics=[
+            Metric(name="itemsViewed"),
+            Metric(name="itemsAddedToCart"),
+            Metric(name="itemsPurchased"),
+            Metric(name="itemRevenue"),
+        ],
+        date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
+    )
+    
+    response = client.run_report(request)
+    
+    # レスポンスをDataFrameに変換
+    rows = []
+    for row in response.rows:
+        rows.append({
+            'sku_id': row.dimension_values[0].value,
+            'item_name': row.dimension_values[1].value,
+            'views': int(row.metric_values[0].value),
+            'add_to_cart': int(row.metric_values[1].value),
+            'purchases': int(row.metric_values[2].value),
+            'revenue': float(row.metric_values[3].value),
+        })
+    
+    df = pd.DataFrame(rows)
+    print(f"[OK] Fetched {len(df)} items from GA4 for {brand}")
+    return df
+
+
 def fetch_ecommerce_data(brand: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
-    GA4からEコマースデータを取得
+    GA4からEコマースデータを取得（リトライ付き）
     
     Args:
         brand: ブランド名 (rady, cherimi, michellmacaron, radycharm)
@@ -91,40 +147,15 @@ def fetch_ecommerce_data(brand: str, start_date: str, end_date: str) -> pd.DataF
         print(f"[ERROR] GA4 property ID not set for brand: {brand}")
         return None
     
-    try:
-        request = RunReportRequest(
-            property=f"properties/{property_id}",
-            dimensions=[
-                Dimension(name="itemId"),
-                Dimension(name="itemName"),
-            ],
-            metrics=[
-                Metric(name="itemsViewed"),
-                Metric(name="itemsAddedToCart"),
-                Metric(name="itemsPurchased"),
-                Metric(name="itemRevenue"),
-            ],
-            date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
-        )
-        
-        response = client.run_report(request)
-        
-        # レスポンスをDataFrameに変換
-        rows = []
-        for row in response.rows:
-            rows.append({
-                'sku_id': row.dimension_values[0].value,
-                'item_name': row.dimension_values[1].value,
-                'views': int(row.metric_values[0].value),
-                'add_to_cart': int(row.metric_values[1].value),
-                'purchases': int(row.metric_values[2].value),
-                'revenue': float(row.metric_values[3].value),
-            })
-        
-        df = pd.DataFrame(rows)
-        print(f"[OK] Fetched {len(df)} items from GA4 for {brand}")
-        return df
+    # リトライ付きで実行
+    fetch_with_retry = retry_with_backoff(
+        lambda: _fetch_ecommerce_data_impl(client, property_id, start_date, end_date, brand),
+        max_retries=3,
+        initial_delay=2
+    )
     
+    try:
+        return fetch_with_retry()
     except Exception as e:
         print(f"[ERROR] Error fetching GA4 data for {brand}: {e}")
         return None

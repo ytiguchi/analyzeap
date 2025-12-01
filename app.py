@@ -1855,6 +1855,26 @@ def api_products():
     return jsonify(products)
 
 
+@app.route('/health')
+def health_check():
+    """ヘルスチェックエンドポイント（Cloud Run用）"""
+    status = {
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'data': {
+            'product_master': data_store['product_master'] is not None,
+            'merged_data': data_store['merged_data'] is not None,
+            'current_period': data_store.get('current_period', 'none'),
+            'brands_loaded': len(data_store.get('ga_sales', {})),
+        },
+        'services': {
+            'r2': is_r2_enabled(),
+            'ga4': is_ga4_configured(),
+        }
+    }
+    return jsonify(status), 200
+
+
 @app.route('/admin/passwords', methods=['GET', 'POST'])
 @admin_required
 def admin_passwords():
@@ -2040,10 +2060,19 @@ def init_from_r2():
         return False
 
 
-# アプリ起動時に初期化
+# アプリ起動時に初期化（エラーでも起動継続）
 with app.app_context():
-    init_passwords()  # パスワード初期化
-    init_from_r2()    # R2からデータ読み込み
+    try:
+        init_passwords()  # パスワード初期化
+    except Exception as e:
+        print(f"[WARN] Password init failed, using defaults: {e}")
+    
+    try:
+        init_from_r2()    # R2からデータ読み込み
+    except Exception as e:
+        print(f"[WARN] R2 init failed, app will start without data: {e}")
+    
+    print("[OK] App initialization completed")
 
 
 if __name__ == '__main__':
