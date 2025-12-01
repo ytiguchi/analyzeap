@@ -1574,25 +1574,35 @@ def fetch_ga4():
                         save_period_data(period_type, brand, ga_info['data'], start_str, end_str, is_previous=True)
                 
                 # チャネルデータもR2に保存
-                if save_channel_data:
+                if save_channel_data and data_store.get('channel_data'):
+                    print(f"[INFO] Saving channel data to R2 for {len(data_store['channel_data'])} brands...")
                     for brand, channel_info in data_store['channel_data'].items():
-                        if channel_info and 'current' in channel_info and channel_info['current'] is not None:
-                            period_info = channel_info.get('period', {})
-                            start_str = period_info.get('start', '')
-                            end_str = period_info.get('end', '')
-                            save_channel_data(period_type, brand, channel_info['current'], start_str, end_str, is_previous=False)
-                            if channel_info.get('previous') is not None:
-                                prev_start = period_info.get('prev_start', '')
-                                prev_end = period_info.get('prev_end', '')
-                                save_channel_data(period_type, brand, channel_info['previous'], prev_start, prev_end, is_previous=True)
+                        try:
+                            if channel_info and 'current' in channel_info and channel_info['current'] is not None:
+                                period_info = channel_info.get('period', {})
+                                start_str = period_info.get('start', '')
+                                end_str = period_info.get('end', '')
+                                result = save_channel_data(period_type, brand, channel_info['current'], start_str, end_str, is_previous=False)
+                                print(f"  [{'OK' if result else 'FAIL'}] Saved channel data for {brand}")
+                                if channel_info.get('previous') is not None:
+                                    prev_start = period_info.get('prev_start', '')
+                                    prev_end = period_info.get('prev_end', '')
+                                    save_channel_data(period_type, brand, channel_info['previous'], prev_start, prev_end, is_previous=True)
+                        except Exception as e:
+                            print(f"  [ERROR] Failed to save channel data for {brand}: {e}")
                 
                 # キャンペーンデータもR2に保存
-                if save_campaign_data:
+                if save_campaign_data and data_store.get('campaign_data'):
+                    print(f"[INFO] Saving campaign data to R2 for {len(data_store['campaign_data'])} brands...")
                     for brand, campaign_info in data_store['campaign_data'].items():
-                        if campaign_info and 'current' in campaign_info and campaign_info['current'] is not None:
-                            save_campaign_data(period_type, brand, campaign_info['current'], '', '', is_previous=False)
-                            if campaign_info.get('previous') is not None:
-                                save_campaign_data(period_type, brand, campaign_info['previous'], '', '', is_previous=True)
+                        try:
+                            if campaign_info and 'current' in campaign_info and campaign_info['current'] is not None:
+                                result = save_campaign_data(period_type, brand, campaign_info['current'], '', '', is_previous=False)
+                                print(f"  [{'OK' if result else 'FAIL'}] Saved campaign data for {brand}")
+                                if campaign_info.get('previous') is not None:
+                                    save_campaign_data(period_type, brand, campaign_info['previous'], '', '', is_previous=True)
+                        except Exception as e:
+                            print(f"  [ERROR] Failed to save campaign data for {brand}: {e}")
             
             flash('データの突合・分析が完了しました！', 'success')
             return redirect(url_for('index'))
