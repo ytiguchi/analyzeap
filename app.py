@@ -191,6 +191,8 @@ BRANDS = ['rady', 'cherimi', 'michellmacaron', 'solni']
 
 def process_product_master_df(df):
     """商品マスタDataFrameを処理"""
+    print(f"[DEBUG] Processing product master with columns: {list(df.columns)}")
+    
     # 必要なカラムを抽出・リネーム
     col_map = {
         'SKU商品ID': 'sku_id',
@@ -213,6 +215,20 @@ def process_product_master_df(df):
     existing_cols = {k: v for k, v in col_map.items() if k in df.columns}
     df = df.rename(columns=existing_cols)
     
+    # sku_idが必須 - なければエラー
+    if 'sku_id' not in df.columns:
+        # 代替カラム名をチェック
+        alt_sku_cols = ['SKU_ID', 'sku_id', 'SKU', 'ItemID', 'item_id', 'SKUID']
+        for alt_col in alt_sku_cols:
+            if alt_col in df.columns:
+                df = df.rename(columns={alt_col: 'sku_id'})
+                print(f"[INFO] Using '{alt_col}' as sku_id")
+                break
+        
+        if 'sku_id' not in df.columns:
+            print(f"[ERROR] Required column 'SKU商品ID' or 'sku_id' not found. Available columns: {list(df.columns)}")
+            raise ValueError(f"商品マスタに必須カラム 'SKU商品ID' がありません。利用可能なカラム: {list(df.columns)[:10]}...")
+    
     # 在庫合計を計算
     stock_cols = ['web_stock', 'adjust_stock', 'expected_stock']
     for col in stock_cols:
@@ -221,6 +237,7 @@ def process_product_master_df(df):
     
     df['total_stock'] = df[['web_stock', 'adjust_stock', 'expected_stock']].sum(axis=1) if all(c in df.columns for c in stock_cols) else 0
     
+    print(f"[OK] Processed product master: {len(df)} rows, columns: {list(df.columns)[:10]}...")
     return df
 
 
