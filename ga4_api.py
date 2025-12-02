@@ -119,7 +119,13 @@ def _fetch_ecommerce_data_impl(client, property_id: str, start_date: str, end_da
             'revenue': float(row.metric_values[3].value),
         })
     
-    df = pd.DataFrame(rows)
+    # 空の場合でも必要なカラムを持つDataFrameを返す
+    if not rows:
+        print(f"[WARN] No data returned from GA4 for {brand}")
+        df = pd.DataFrame(columns=['sku_id', 'item_name', 'views', 'add_to_cart', 'purchases', 'revenue'])
+    else:
+        df = pd.DataFrame(rows)
+    
     print(f"[OK] Fetched {len(df)} items from GA4 for {brand}")
     return df
 

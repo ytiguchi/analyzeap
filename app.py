@@ -2075,14 +2075,26 @@ def init_from_ga4():
             print("[WARN] No GA4 data fetched")
             return False
         
+        loaded_count = 0
         for brand, result in results.items():
-            data_store['ga_sales'][brand] = result
-            period = result['period']
-            print(f"[OK] Loaded {brand.upper()}: {len(result['data'])} items ({period['start_date'].strftime('%m/%d')}〜{period['end_date'].strftime('%m/%d')})")
+            # データが空でないことを確認
+            if result and 'data' in result and len(result['data']) > 0:
+                data_store['ga_sales'][brand] = result
+                period = result['period']
+                print(f"[OK] Loaded {brand.upper()}: {len(result['data'])} items ({period['start_date'].strftime('%m/%d')}〜{period['end_date'].strftime('%m/%d')})")
+                loaded_count += 1
+            else:
+                print(f"[WARN] Skipping {brand.upper()}: no data")
+        
+        if loaded_count == 0:
+            print("[WARN] All brands returned empty data")
+            return False
         
         return True
     except Exception as e:
         print(f"[ERROR] Error fetching GA4 data: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
