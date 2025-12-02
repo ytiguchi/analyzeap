@@ -2060,17 +2060,62 @@ def init_from_r2():
         return False
 
 
+def init_from_ga4():
+    """起動時にGA4 APIから売上データを取得"""
+    if not is_ga4_configured():
+        print("[WARN] GA4 API is not configured. Set GA4 environment variables to enable.")
+        return False
+    
+    try:
+        print("[INFO] Fetching GA4 data on startup...")
+        # 週次データを取得（前日だけだとデータが少ない可能性があるため）
+        results = fetch_all_brands_data('weekly')
+        
+        if not results:
+            print("[WARN] No GA4 data fetched")
+            return False
+        
+        for brand, result in results.items():
+            data_store['ga_sales'][brand] = result
+            period = result['period']
+            print(f"[OK] Loaded {brand.upper()}: {len(result['data'])} items ({period['start_date'].strftime('%m/%d')}〜{period['end_date'].strftime('%m/%d')})")
+        
+        return True
+    except Exception as e:
+        print(f"[ERROR] Error fetching GA4 data: {e}")
+        return False
+
+
 # アプリ起動時に初期化（エラーでも起動継続）
 with app.app_context():
+    print("[INFO] Initializing app...")
+    
     try:
         init_passwords()  # パスワード初期化
     except Exception as e:
         print(f"[WARN] Password init failed, using defaults: {e}")
     
     try:
-        init_from_r2()    # R2からデータ読み込み
+        r2_ok = init_from_r2()    # R2からデータ読み込み
     except Exception as e:
-        print(f"[WARN] R2 init failed, app will start without data: {e}")
+        print(f"[WARN] R2 init failed: {e}")
+        r2_ok = False
+    
+    try:
+        ga4_ok = init_from_ga4()  # GA4からデータ取得
+    except Exception as e:
+        print(f"[WARN] GA4 init failed: {e}")
+        ga4_ok = False
+    
+    # 両方揃ったら分析実行
+    if r2_ok and ga4_ok and data_store['product_master'] is not None and data_store['ga_sales']:
+        print("[INFO] Running merge and analyze...")
+        merge_and_analyze()
+        print("[OK] App initialization complete with merged data!")
+    elif r2_ok:
+        print("[WARN] App initialized with product master only (no GA4 data)")
+    else:
+        print("[WARN] App initialized without data")
     
     print("[OK] App initialization completed")
 
